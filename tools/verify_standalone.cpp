@@ -6,12 +6,17 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 #include "rcvd/core/result.hpp"
 #include "rcvd/numerics/integrate.hpp"
 #include "rcvd/numerics/linalg.hpp"
 #include "rcvd/numerics/pchip.hpp"
 #include "rcvd/numerics/roots.hpp"
+#include "rcvd/tire/conformance.hpp"
+#include "rcvd/tire/linear.hpp"
+
+#include "support/defective_tire.hpp"
 #include "rcvd/units/convert.hpp"
 
 static int g_fail = 0, g_pass = 0;
@@ -235,6 +240,172 @@ int main() {
         }
         close_to(z[0], std::cos(10.0), 1e-9, "oscillator cos(10)");
         close_to(z[1], -std::sin(10.0), 1e-9, "oscillator -sin(10)");
+    }
+
+    std::printf("== tire L1/L2 (spec 6.1-6.3, 6.7) ==\n");
+    {
+        using namespace rcvd::tire;
+        const double kLbfDeg = units::LBF_PER_DEG_TO_N_PER_RAD;
+
+        // --- construction validation ---------------------------------------
+        {
+            LinearTireConfig c; c.id = "both"; c.C_alpha_N_per_rad = -1000.0;
+            c.load_sensitivity = QuadraticStiffness{-0.4, 8e-5};
+            auto r = LinearTire::create(c);
+            check(!r.ok() && r.error().code == "E-TIRE-005", "two stiffness sources -> E-TIRE-005");
+        }
+        {
+            LinearTireConfig c; c.id = "none";
+            auto r = LinearTire::create(c);
+            check(!r.ok() && r.error().code == "E-TIRE-005", "no stiffness source -> E-TIRE-005");
+        }
+        {
+            LinearTireConfig c; c.id = "pos"; c.C_alpha_N_per_rad = +1000.0;
+            auto r = LinearTire::create(c);
+            check(!r.ok() && r.error().code == "E-TIRE-003", "positive C_alpha -> E-TIRE-003");
+        }
+        {
+            // c0 = -0.4 1/deg, c1 = 0.8e-4 1/(lbf*deg) converted to SI; sign change
+            // at Fz = -c0/c1 = 5000 lbf = 22241 N. An operating ceiling above that
+            // is fatal per 6.7.
+            const double c0 = -0.4 / units::DEGREE;
+            const double c1 = 0.8e-4 / (units::POUND_FORCE * units::DEGREE);
+            LinearTireConfig c; c.id = "quad"; c.load_sensitivity = QuadraticStiffness{c0, c1};
+            c.Fz_max_operating_N = 30000.0;
+            auto r = LinearTire::create(c);
+            check(!r.ok() && r.error().code == "E-TIRE-004", "C_alpha sign change in range -> E-TIRE-004");
+
+            c.Fz_max_operating_N = 15000.0;   // below the 22241 N sign change
+            auto r2 = LinearTire::create(c);
+            check(r2.ok(), "quadratic accepted below the sign change");
+            if (r2.ok()) {
+                // 6.7: |C_alpha| peaks at Fz* = -c0/(2 c1) = 2500 lbf = 11120.6 N.
+                const auto pk = r2.value().stiffness_peak_load_N();
+                check(pk.has_value(), "stiffness peak load reported");
+                close_to(*pk, 2500.0 * units::POUND_FORCE, 1e-12, "W-TIRE-101 breakpoint Fz*");
+            }
+        }
+        {
+            LinearTireConfig c; c.id = "fric"; c.C_alpha_N_per_rad = -1000.0;
+            c.document_has_friction_block = true;
+            auto r = LinearTire::create(c);
+            check(!r.ok() && r.error().code == "E-TIRE-006", "friction block on L2 -> E-TIRE-006");
+        }
+
+        // --- L1, model 6.2 --------------------------------------------------
+        LinearTireConfig l1;
+        l1.id = "linear";
+        l1.C_alpha_N_per_rad = -640.0 * kLbfDeg;   // CH5 front axle
+        l1.pneumatic_trail_m = 1.1 * units::INCH;
+        auto r_l1 = LinearTire::create(l1);
+        check(r_l1.ok(), "L1 constructs");
+        if (r_l1.ok()) {
+            const LinearTire& t = r_l1.value();
+            check(!t.has_mu() && t.is_C1(), "L1: has_mu() false, is_C1() true");
+            check(t.slope_break_points().empty(), "L1 has no slope breaks");
+
+            const auto o = t.evaluate({0.02, 5000.0});
+            close_to(o.Fy_N, -640.0 * kLbfDeg * 0.02, 1e-15, "L1 Fy = C_alpha*alpha");
+            close_to(o.Mz_Nm, -o.trail_m * o.Fy_N, 1e-15, "L1 (6.2) Mz = -t_p*Fy");
+            close_to(o.C_alpha_N_per_rad, -640.0 * kLbfDeg, 1e-15, "L1 local slope");
+            check(!o.mu_peak.has_value(), "L1 mu_peak disengaged (T5)");
+
+            // T4 matters here precisely BECAUSE (6.1) never mentions Fz.
+            const auto z = t.evaluate({0.02, 0.0});
+            check(z.Fy_N == 0.0 && z.Mz_Nm == 0.0, "L1 T4: lifted wheel makes no force");
+            check(std::isfinite(z.trail_m), "L1 T8: trail finite at zero load");
+
+            // T8 at alpha = 0, where -Mz/Fy would be 0/0.
+            const auto zero = t.evaluate({0.0, 5000.0});
+            check(zero.Fy_N == 0.0 && zero.Mz_Nm == 0.0, "L1 T2: exact zero crossing");
+            close_to(zero.trail_m, 1.1 * units::INCH, 1e-15, "L1 T8: trail is t_p at alpha=0");
+
+            const auto rep = check_contract(t);
+            check(rep.ok(), "L1 passes T1-T8 conformance");
+            for (const auto& f : rep.failures) std::printf("    %s: %s\n", f.check.c_str(), f.detail.c_str());
+        }
+
+        // --- L2, model 6.3 --------------------------------------------------
+        LinearTireConfig l2;
+        l2.id = "linear_breakaway";
+        l2.C_alpha_N_per_rad = -640.0 * kLbfDeg;
+        l2.pneumatic_trail_m = 1.1 * units::INCH;
+        l2.breakaway_slip_rad = 5.0 * units::DEGREE;   // Ch. 5 Prob. 5
+        auto r_l2 = LinearTire::create(l2);
+        check(r_l2.ok(), "L2 constructs");
+        if (r_l2.ok()) {
+            const LinearTire& t = r_l2.value();
+            check(!t.has_mu(), "L2: has_mu() false (pure stiffness, T5)");
+            check(!t.is_C1(), "L2: is_C1() false");
+            check(t.slope_break_points().size() == 2, "L2 exposes both kink locations");
+
+            const double abk = 5.0 * units::DEGREE;
+            // Saturated magnitude is |C_alpha|*alpha_bk = 3200 lbf, which is what
+            // makes B-13's skidpad limit 3200/2109 = 1.5173 g.
+            const auto sat = t.evaluate({2.0 * abk, 5000.0});
+            close_to(std::abs(sat.Fy_N) / units::POUND_FORCE, 3200.0, 1e-12, "L2 saturated force [lbf]");
+            check(sat.saturated, "L2 reports saturation");
+            close_to(sat.C_alpha_N_per_rad, 0.0, 0.0, "L2 local slope is 0 above breakaway");
+
+            // 6.3: at EXACTLY |alpha| = alpha_bk the derivative from BELOW is returned.
+            close_to(t.dFy_dalpha({abk, 5000.0}), -640.0 * kLbfDeg, 1e-15,
+                     "L2 slope at exactly alpha_bk is the one from below");
+            close_to(t.dFy_dalpha({abk * 1.0001, 5000.0}), 0.0, 0.0, "L2 slope just above is 0");
+
+            const auto rep = check_contract(t);
+            check(rep.ok(), "L2 passes T1-T8 conformance");
+            for (const auto& f : rep.failures) std::printf("    %s: %s\n", f.check.c_str(), f.detail.c_str());
+        }
+
+        // --- acceptance-linked values through the model + unit layer ---------
+        {
+            // B-13: CH5 skidpad limit. The understeering front axle saturates
+            // first, so A_Y = |C_F|*alpha_bk / W_F with W_F = 3700*0.57 = 2109 lbf.
+            LinearTireConfig f = l2;
+            auto tf = LinearTire::create(f);
+            const double Fy_lbf = std::abs(tf.value().evaluate({0.2, 5000.0}).Fy_N) / units::POUND_FORCE;
+            const double W_F = 3700.0 * 0.57;
+            close_to(Fy_lbf / W_F, 1.5173, 1e-4, "B-13 skidpad limit A_Y [g]");
+
+            // 17.6 case a: 60-slug vehicle, l = 10 ft, C = 420 lbf/deg, alpha_bk = 6 deg.
+            LinearTireConfig m;
+            m.id = "mmm";
+            m.C_alpha_N_per_rad = -420.0 * kLbfDeg;
+            m.breakaway_slip_rad = 6.0 * units::DEGREE;
+            auto tm = LinearTire::create(m);
+            const double Fy = std::abs(tm.value().evaluate({0.5, 5000.0}).Fy_N);
+            const double mg = 60.0 * units::SLUG * units::G_STANDARD;
+            close_to(Fy / mg, 1.3054, 1e-4, "17.6 case a front construction line A_Y [g]");
+            const double a_ft = 5.0 * units::FOOT, l_ft = 10.0 * units::FOOT;
+            close_to(a_ft * Fy / (mg * l_ft), 0.6527, 1e-4, "17.6 case a front line C_N");
+        }
+    }
+
+    std::printf("== tire conformance fault injection (Appendix D) ==\n");
+    {
+        // A conformance suite that cannot fail is worthless. Inject one defect at a
+        // time and assert the intended check -- and only that check -- fires.
+        using namespace rcvd::tire;
+        const double Ca = -640.0 * units::LBF_PER_DEG_TO_N_PER_RAD;
+
+        for (int defect = static_cast<int>(Defect::T1_not_odd);
+             defect <= static_cast<int>(Defect::T8_nan_trail); ++defect) {
+            const Defect d = static_cast<Defect>(defect);
+            DefectiveTire bad(Ca, d);
+            const auto rep = check_contract(bad);
+            const bool fired = std::any_of(
+                rep.failures.begin(), rep.failures.end(),
+                [&](const ConformanceReport::Failure& f) { return f.check == expected_check(d); });
+            check(fired, "conformance catches " + std::string(defect_name(d)) +
+                             " (expected " + std::string(expected_check(d)) + ")");
+        }
+
+        // And the same model with no defect injected must pass cleanly, so the
+        // above is not just "everything fails".
+        DefectiveTire clean(Ca, Defect::none);
+        const auto rep = check_contract(clean);
+        check(rep.ok(), "the un-injected control model passes");
+        for (const auto& f : rep.failures) std::printf("    %s: %s\n", f.check.c_str(), f.detail.c_str());
     }
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

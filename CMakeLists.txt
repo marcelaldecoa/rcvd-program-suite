@@ -61,9 +61,15 @@ target_link_libraries(rcvd_numerics INTERFACE rcvd_core)
 # core; neither may ever see io/, capi/ or app/. Enforced here by PRIVATE linkage
 # once those targets exist, plus the include-cycle check in CI.
 
+add_library(rcvd_tire INTERFACE)
+target_include_directories(rcvd_tire INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_link_libraries(rcvd_tire INTERFACE rcvd_numerics)  # conformance uses (13.2)
+
 add_library(rcvd::units    ALIAS rcvd_units)
 add_library(rcvd::core     ALIAS rcvd_core)
 add_library(rcvd::numerics ALIAS rcvd_numerics)
+add_library(rcvd::tire     ALIAS rcvd_tire)
 
 if(RCVD_BUILD_TESTS)
   enable_testing()

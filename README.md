@@ -17,7 +17,7 @@ Following the build order of spec Appendix C:
 | 1 | `units` — exact constants, closed vocabulary, round-trip | **done** |
 | 2 | `core` — `Result<T>`/`Diagnostic`, §14.2 register | **partial** — error channel done; value types, JSON schema and validation outstanding |
 | 3 | `numerics` — PCHIP, Brent, LU + `rcond`, RK4, DOPRI5(4) dense output | **done** |
-| 4 | `tire` — L1, L2, conformance T1–T8, then L3/L4/L5 | not started |
+| 4 | `tire` — L1, L2, conformance T1–T8, then L3/L4/L5 | **partial** — L1, L2 and the shared T1–T8 suite done; L3/L4/L5 outstanding |
 | 5 | `models::BicycleModel` + `analysis` → B-01 … B-31 | not started |
 | 6–11 | four-wheeler, MMM, ride/roll, lap solver, io/capi/cli, GUI | not started |
 
@@ -44,8 +44,28 @@ mirrors the same assertions with no dependencies, and **is** verified:
 cl /nologo /std:c++20 /EHsc /W4 /WX /permissive- /fp:precise /I include /Fe:verify.exe tools/verify_standalone.cpp
 ```
 
-52 assertions, all passing. To get the authoritative suite running,
+94 assertions, all passing. To get the authoritative suite running,
 `winget install Kitware.CMake` and use the CMake path above.
+
+## The conformance suite is itself tested
+
+`tire/conformance.hpp` implements T1–T8 once, against the abstract `TireModel`,
+so a new model earns its conformance by construction rather than by someone
+remembering to write its checks. Because a conformance suite that cannot fail is
+worthless, `tests/support/defective_tire.hpp` injects each violation in turn and
+the suite is required to catch it — and the un-injected control is required to
+pass, so the result is not merely "everything fails".
+
+Two of the checks needed care:
+
+- **T7 continuity** cannot use an absolute tolerance on `Fy(p+ε) − Fy(p−ε)`. With
+  `C_α ≈ −1.6e5 N/rad` the *legitimate* change over `ε = 1e-9` is already 3e-4 N,
+  so any fixed bound either rejects correct models or is too loose to catch a real
+  jump. It uses a scale-free ratio instead: for a continuous curve the gap shrinks
+  linearly with `ε`, so `gap(ε) ≈ gap(10ε)/10`; at a discontinuity both equal the
+  jump.
+- **T6** excludes interpolation knots as well as declared slope breaks, for the
+  reason recorded in the spec at §6.1.
 
 ## Layout
 
@@ -59,7 +79,11 @@ include/rcvd/
              roots.hpp       Brent (§13.7) + the (13.2) differentiation step
              linalg.hpp      LU with partial pivoting and rcond (§13.8)
              integrate.hpp   RK4 fixed, DOPRI5(4) with dense output (§13.2)
+  tire/      tire_model.hpp  the §6.1 contract; TireState/TireOutput (§4.3)
+             linear.hpp      L1 (6.1) and L2 (6.3), with (6.10) load sensitivity
+             conformance.hpp the shared T1-T8 check, applied to every model
 tests/       Catch2 v3 suite, authoritative
+  support/   defective_tire.hpp — fault injection for the conformance suite
 tools/       verify_standalone.cpp — dependency-free mirror
 ```
 

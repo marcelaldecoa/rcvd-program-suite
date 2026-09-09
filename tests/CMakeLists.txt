@@ -9,10 +9,13 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(rcvd_tests
   test_units.cpp
   test_core.cpp
-  test_numerics.cpp)
+  test_numerics.cpp
+  test_tire.cpp)
+
+target_include_directories(rcvd_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(rcvd_tests PRIVATE
-  rcvd::units rcvd::core rcvd::numerics
+  rcvd::units rcvd::core rcvd::numerics rcvd::tire
   rcvd_flags
   Catch2::Catch2WithMain)
 
