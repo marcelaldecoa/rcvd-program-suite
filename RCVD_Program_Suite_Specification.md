@@ -764,7 +764,21 @@ Given `TireState{α, F_z ≥ 0, u}`, a `TireModel` SHALL return `F_y`, `M_z`, th
   tire is selected.
 - **T6 — Slope consistency.** The analytic `dFy_dalpha` SHALL agree with a Richardson-
   extrapolated central difference to `1e-6` relative at 20 sample points spanning the valid
-  range, excluding declared slope discontinuities.
+  range, excluding declared slope discontinuities **and interpolation knots**.
+
+  The knot exclusion is not a convenience. (13.2)'s stencil samples `x ± h` and `x ± 2h`
+  and extrapolates on the assumption that the function is smooth across all four points.
+  A PCHIP interpolant (§13.5) is C¹ but **not** C², so a stencil straddling a knot sees a
+  curvature jump and degrades from `O(h⁴)` to `O(h)`. Measured on a 5-node monotone table
+  with `h = eps^(1/3)`: the check returns **6.9e−11** away from the knots and **1.3e−6**
+  with the sample point sitting on one — i.e. a *correct* L3 implementation fails a
+  `1e-6` bar for a reason that has nothing to do with its analytic derivative.
+
+  Note that a knot is invisible to `slope_break_points()`, and correctly so: that
+  accessor reports C⁰ slope breaks (§6.1 T7), of which a PCHIP interpolant has none. The
+  conformance suite SHALL therefore obtain the knot locations from the model's own
+  abscissa grid and place its sample points at least `10·h` away from each, or apply a
+  one-sided difference there per §13.6.
 - **T7 — C⁰ minimum, C¹ preferred.** Every model SHALL be continuous. Models that are only
   C⁰ (`linear_breakaway`, `table` with linear interpolation) SHALL declare
   `is_C1() == false`; the integrator selects a discontinuity-tolerant path (§13.3) and
