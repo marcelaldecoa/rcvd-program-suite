@@ -214,9 +214,18 @@ SHALL be produced. This table is an acceptance test, not commentary ([R280] p. 4
 α_F = β + a·r/u − δ            α_R = β − b·r/u                    (3.1)
 ```
 
-with `β = arctan(v/u) ≈ v/u`. The small-angle form SHALL be used only when
-`|v/u| < 0.15 rad`; above that the arctangent form SHALL be used and a diagnostic emitted
-(§15.3).
+with `β = arctan(v/u)`. **The arctangent form is normative and unconditional.** There is
+no automatic switch to the small-angle form: an implementation that silently changes its
+force path at a threshold cannot be bit-reproducible across a manoeuvre that crosses it
+(Rule A2), and the crossing would land inside an integrator stage.
+
+The small-angle form `β ≈ v/u` is available only through the explicit
+`SolverConfig.small_angle_slip` switch (§5.5), which forces it unconditionally. That
+switch exists for one purpose: bicycle-equivalence mode (C-02, §17.8), where P2 must
+reproduce P1's linearised (8.3) exactly. When it is set and `|v/u|` exceeds
+`small_angle_limit` (default 0.15 rad), `W-NUM-220` SHALL be emitted with the maximum
+excursion; the force path SHALL NOT change in response. `small_angle_limit` is therefore
+a diagnostic threshold, never a branch condition.
 
 **Cornering stiffness sign.** `C_α ≡ ∂F_y/∂α |_{α=0} < 0`. Lateral force is
 `F_y = C_α·α` in the linear range. Implementations SHALL reject a positive `C_α` at input
@@ -336,7 +345,7 @@ struct TireState  { double alpha_rad;      // slip angle
 
 struct TireOutput { double Fy_N;           // lateral force, SAE tire frame
                     double Mz_Nm;          // aligning moment
-                    double trail_m;        // pneumatic trail = -Mz/Fy
+                    double trail_m;        // pneumatic trail; see T8, never NaN
                     std::optional<double> mu_peak;  // engaged iff has_mu(); see §6.1 T5
                     double C_alpha_N_per_rad; // local slope dFy/dalpha
                     bool   saturated; };
@@ -372,16 +381,34 @@ public:
 class BicycleModel   : public Plant { /* §8  */ };
 class FourWheelerModel : public Plant { /* §9 */ };
 
+// ---- error channel ---------------------------------------------------
+struct Diagnostic { std::string_view code;   // "E-SS-030"; §14.2 register
+                    Severity        severity;
+                    std::string     message;
+                    std::optional<double> t_s;        // when, if during a run
+                    std::optional<Wheel>  wheel; };   // where, if wheel-specific
+
+template <class T>
+class Result {                      // §4.6; C++20, no <expected> dependency
+  std::variant<T, Diagnostic> v_;
+public:
+  Result(T);  Result(Diagnostic);
+  bool ok() const noexcept;
+  explicit operator bool() const noexcept { return ok(); }
+  const T&          value() const;  // precondition: ok(); asserts otherwise
+  const Diagnostic& error() const;  // precondition: !ok()
+};
+
 // ---- analysis --------------------------------------------------------
-StabilityDerivatives  stability_derivatives(const Vehicle&, double V_mps);
-SteadyStateResult     steady_state        (const Plant&, const Vehicle&,
-                                           double V_mps, double delta_rad);
-Eigenstructure        eigenstructure      (const Vehicle&, double V_mps);
-MomentDiagram         moment_method       (const Vehicle&, const MmmSweep&);
-RideRollResult        ride_roll_totals_to_components(const RideRollInput&);
-RideRollResult        ride_roll_components_to_totals(const RideRollInput&);
-LapResult             lap_solve           (const Plant&, const Circuit&,
-                                           const DriverPlan&, const SolverConfig&);
+Result<StabilityDerivatives> stability_derivatives(const Vehicle&, double V_mps);
+Result<SteadyStateResult>    steady_state        (const Plant&, const Vehicle&,
+                                                  double V_mps, double delta_rad);
+Result<Eigenstructure>       eigenstructure      (const Vehicle&, double V_mps);
+Result<MomentDiagram>        moment_method       (const Vehicle&, const MmmSweep&);
+Result<RideRollResult>       ride_roll_totals_to_components(const RideRollInput&);
+Result<RideRollResult>       ride_roll_components_to_totals(const RideRollInput&);
+Result<LapResult>            lap_solve           (const Plant&, const Circuit&,
+                                                  const DriverPlan&, const SolverConfig&);
 } // namespace rcvd
 ```
 
@@ -402,6 +429,25 @@ Every run SHALL emit a manifest containing: spec revision, library version, git 
 compiler and flags, platform, the fully-resolved input document (post-defaulting,
 post-unit-conversion, in SI), the `SolverConfig`, wall time, integrator statistics, and the
 SHA-256 of the output data file. Results without a manifest are not reportable.
+
+### 4.6 Error channel (normative)
+
+**Rule A3.** Every operation that §14.2 can fail SHALL return `Result<T>` by value. The
+core SHALL NOT throw across any API boundary, and `capi/` SHALL NOT wrap calls in
+`try`/`catch` — there is nothing to catch. Exceptions remain permitted only for
+programming defects that no input can provoke (`std::bad_alloc`, a failed assertion), which
+are not `E-*` conditions and are not recoverable.
+
+**Why not `std::expected`.** It is C++23; §4.2 mandates C++20 and the §18.2 platform floor
+is set accordingly. `Result<T>` is the same shape over `std::variant` and is a drop-in
+replacement should a later revision raise the standard — the member names are chosen to
+match, so the migration is a type alias.
+
+**Warnings are not errors.** A `W-*` or `EV-*` diagnostic does not produce an error
+`Result`; it is appended to the run manifest and to `Observation::diagnostics`, and the
+computation proceeds (§14.1). Only `E-*` produces `!ok()`. Consequently a successful
+`Result` may still carry warnings, and callers SHALL surface them (§15.3) rather than
+treating `ok()` as "nothing to report".
 
 ---
 
@@ -453,8 +499,14 @@ is parsed by the `units` module against a closed vocabulary.
     //   "aux_roll_stiffness_rear":  {"value": 109.218, "unit": "lbf*ft/deg"},
     //   "tire_rate_front":          {"value": 1500, "unit": "lbf/in"},      // per tire
     //   "tire_rate_rear":           {"value": 1500, "unit": "lbf/in"}
-    // which yields 974.96 / 324.96 lbf*ft/deg via (12.7).
+    // which yields 975.00 / 325.00 lbf*ft/deg via (12.7).
   },
+  // NOTE: the springing block above is the §17.4 P6 case (1600/1000 lbf axles,
+  // 18 in CG, roll axis on the ground), reproduced here only to illustrate the
+  // two mutually-exclusive forms. It is NOT dimensionally matched to the CH5
+  // inertia/geometry above; do not build a CH5 fixture from this snippet. The
+  // normative CH5 fixture is defined in §17.2.
+
   "steering": { "ratio": 14.0 },
   "tires": { "LF": "sedan_front", "RF": "sedan_front",
              "LR": "sedan_rear",  "RR": "sedan_rear" },
@@ -511,14 +563,27 @@ This is what makes cross-program check C-04 (§17.8) implementable.
   "linear": { "cornering_stiffness": {"value": -640, "unit": "lbf/deg"},
               "breakaway_slip":      {"value": 5,    "unit": "deg"} },
   "pneumatic_trail": {"value": 1.1, "unit": "in"},
+  "relaxation": { "mode": "length", "sigma": {"value": 6, "unit": "ft"} }
+}
+```
+
+The alternative cornering-stiffness source — mutually exclusive with
+`linear.cornering_stiffness` above, per the redundancy rule below — is the quadratic:
+
+```jsonc
   "load_sensitivity": { "mode": "quadratic",            // C_alpha(Fz) = c0*Fz + c1*Fz^2
                         "c0": {"value": -0.4,  "unit": "1/deg"},
-                        "c1": {"value": 0.8e-4,"unit": "1/(lbf*deg)"} },
-  "relaxation": { "mode": "length", "sigma": {"value": 6, "unit": "ft"} },
+                        "c1": {"value": 0.8e-4,"unit": "1/(lbf*deg)"} }
+```
+
+and the friction block, admissible only for a model that declares `has_mu() == true`
+(§6.1 T5 — **not** `linear` or `linear_breakaway`; supplying it for either raises
+`E-TIRE-006`):
+
+```jsonc
   "friction":   { "mode": "linear",                     // mu = mu0 - mu1*Fz
                   "mu0": 1.22,
                   "mu1": {"value": 0.00024, "unit": "1/lbf"} }
-}
 ```
 
 **Every dimensional coefficient carries a unit (Rules U2/U6).** `c0` has dimensions of
@@ -607,7 +672,8 @@ down as seen by the driver), `surface_friction_scale` (multiplies every tire `μ
   "load_transfer": true,
   "aero": true,
   "track_velocity_terms": true,              // the +/- r*t/2 of (9.14)
-  "small_angle_slip": false,                 // v/u instead of arctan(v/u)
+  "small_angle_slip": false,                 // force v/u instead of arctan(v/u), §3.3
+  "steer_projection": true,                  // the cos/sin delta factors of (9.11)-(9.13)
   "aligning_moment": true,                   // include sum M_z in (9.13)
   "longitudinal_forces": true,
 
@@ -659,6 +725,7 @@ Every type named in the §4.3 API sketch, and where it is defined:
 | `Circuit` | §11.2 | |
 | `Observation` | §8.9, §9.8 | the named output-channel bundle for the active plant |
 | `Interval` | §6.1 | `{lo, hi}` closed real interval |
+| `Result<T>`, `Diagnostic` | §4.6 | the error channel; `E-*` only, per Rule A3 |
 | `StabilityDerivatives` | §8.3 | the six derivatives plus the speed at which they were formed |
 | `SteadyStateResult` | §8.5 | state, gains, condition number |
 | `Eigenstructure` | §8.6 | poles, `ω_n`, `ζ`, `τ_dominant`, eigenvectors |
@@ -702,6 +769,25 @@ Given `TireState{α, F_z ≥ 0, u}`, a `TireModel` SHALL return `F_y`, `M_z`, th
   C⁰ (`linear_breakaway`, `table` with linear interpolation) SHALL declare
   `is_C1() == false`; the integrator selects a discontinuity-tolerant path (§13.3) and
   the MMM sweep refines near the kink (§10.5).
+- **T8 — trail is total, never 0/0.** `TireOutput::trail_m` is the pneumatic trail
+  `t_p = −M_z/F_y`. T2 makes both numerator and denominator **exactly** zero at `α = 0`,
+  and T4 makes them zero at `F_z = 0` — the two states every straight-line run occupies
+  from its first step. Since §13.1 makes a `NaN` a fatal defect, the quotient SHALL NOT be
+  evaluated at those points. The model SHALL return the **limit** value instead:
+
+  ```
+                ⎧ −M_z / F_y                     |F_y| ≥ F_y,floor  (default 1e-6 N)
+  trail_m  =    ⎨                                                                (6.2a)
+                ⎩ t_p(F_z)   [α → 0 limit]       otherwise
+  ```
+
+  where `t_p(F_z)` is the model's own trail datum: the `pneumatic_trail` input for L1/L2,
+  the `trail_of_Fz` table for L4, and `lim_{α→0} −M_z/F_y` evaluated analytically or by
+  (13.2) for L3/L5. At `F_z = 0` the trail is a geometric property of a tire carrying no
+  load and is **undefined**; the model SHALL return `t_p(0⁺)` and SHALL NOT return zero,
+  because a zero trail is a physical claim (the force acts at the contact centre) that a
+  lifted wheel does not make. The conformance suite SHALL assert finiteness of `trail_m`
+  at `α = 0` and at `F_z = 0` for every model.
 
 ### 6.2 Model L1 — linear
 
@@ -1484,13 +1570,22 @@ the wheel's slip angle is set to `±π/2·sgn(numerator)` and event `EV-WHEEL-ST
 raised (distinct from `EV-SPIN`, which is reserved for `|β| > 90°`, §11.5).
 
 **Definition of `A_X` in the load-transfer equations.** `A_X` in (9.3) SHALL be the
-**achieved** longitudinal acceleration of the CG in the body frame, `A_X = u̇ − v·r`,
-evaluated from (9.12) with the forces of the current integrator stage. Under
-`speed_mode = constant`, (9.12) is not integrated but is still **evaluated** to obtain the
-`A_X` that the tires and drag imply, so that longitudinal load transfer reflects the drag
-the vehicle is actually experiencing; the resulting `u̇` is then discarded. Using the
-commanded schedule value instead would omit drag-induced transfer entirely. This choice
-SHALL be recorded in the manifest.
+**specific longitudinal force** on the CG in the body frame, evaluated from the right-hand
+side of (9.12) with the forces of the current integrator stage:
+
+```
+A_X = ( Σ F_x,i cos δ_i − Σ F_y,i sin δ_i − F_D ) / m                        (9.12a)
+```
+
+This definition holds under **both** speed modes, and it is deliberately *not* written as
+`A_X = u̇ − v·r`. Under `speed_mode = constant`, `u` is held, so `u̇ = 0` and that
+expression would evaluate to `−v·r` — silently discarding the drag-induced longitudinal
+transfer this paragraph exists to preserve. (9.12) is still **evaluated** in that mode to
+obtain (9.12a); the `u̇` it implies is then discarded. Using the commanded schedule value
+instead would omit drag-induced transfer entirely. This choice SHALL be recorded in the
+manifest, and a dedicated unit test SHALL confirm that a constant-speed run with `C_D > 0`
+and no tire longitudinal force produces a **non-zero** `ΔF_z,x` of the sign that unloads
+the front axle.
 
 **Speed mode `constant_accel`.** The source programs increase *path* speed at a constant
 rate (default 0.1 g) irrespective of vehicle attitude. This is retained for compatibility
@@ -2118,7 +2213,8 @@ rather than allowed to produce large numbers:
 Three severities:
 
 - **Error (`E-*`)** — the computation cannot proceed correctly. The run aborts and returns a
-  structured error. No partial result is presented as a result.
+  failed `Result<T>` carrying a `Diagnostic` (§4.6, Rule A3). No partial result is
+  presented as a result.
 - **Warning (`W-*`)** — the computation proceeds but a modelling assumption is being
   stretched. Warnings are written to the manifest **and** displayed; they are not
   suppressible below a "shown once per run" level.
@@ -2143,6 +2239,8 @@ document. Solvers do not re-validate per step; they assert.
 | `E-VEH-140` | Roll divergence: `K_φF + K_φR ≤ 1.05·m_s g h₂` |
 | `E-TIRE-003` | Positive cornering stiffness supplied |
 | `E-TIRE-004` | Quadratic `C_α(F_z)` changes sign within the operating load range |
+| `E-TIRE-005` | Tire document supplies two independent sources of cornering stiffness |
+| `E-TIRE-006` | Friction block supplied for a model that declares `has_mu() == false` (§6.1 T5) |
 | `E-TIRE-020` | Load outside tabulated range by more than 25 % |
 | `E-SS-030` | Steady-state system singular (at or above critical speed) |
 | `E-P2-050` | Load-transfer fixed point failed to converge |
@@ -2153,9 +2251,9 @@ document. Solvers do not re-validate per step; they assert.
 | `W-TIRE-101` | Load beyond the maximum of the quadratic `C_α(F_z)` |
 | `W-VEH-120` | Roll-axis inclination beyond the small-angle assumption |
 | `W-VEH-141` | Roll gradient outside the physical band of (9.10c) — suspect `K_φ` units |
-| `E-TIRE-005` | Tire document supplies two independent sources of cornering stiffness |
 | `W-NUM-200` | Integration step too large for the fastest mode present |
 | `W-NUM-210` | Fixed-step integrator with a C⁰ tire model |
+| `W-NUM-220` | `small_angle_slip` forced on with `\|v/u\|` beyond `small_angle_limit` (§3.3) |
 | `W-RR-011` | Desired ride rate above 80 % of tire rate (ill-conditioned) |
 | `W-RR-021` | Required anti-roll bar rate is negative |
 | `EV-LIFT` | Wheel load reached zero |
@@ -2287,11 +2385,18 @@ All values below were reproduced by an independent SI implementation of §8; the
 | B-15 | δ_Ack, R = 50 ft [deg] | 9.98 | 9.9790 | 1.1e-4 | p. 55 |
 | B-16 | δ_SW at 14:1 [deg] | 139.7 | 139.706 | 4e-5 | p. 55 |
 | B-17 | Crowned road, 5° tilt: β, δ [deg] | 0.239, −0.048 | 0.2392, −0.0480 | <2e-3 | p. 57 |
-| B-18 | Crosswind 100 lbf @1.5 ft: F_yF, F_yR [lbf] | −74.3, −25.7 | −74.29, −25.71 | <2e-3 | p. 56 |
+| B-18 | Crosswind 100 lbf @1.5 ft: F_yF, F_yR [lbf] | −74.3, −25.7 | −74.225, −25.775 | 1.0e-3 | p. 56 |
 | B-19 | 43/57 reversed: N_β [lbf·ft/deg] | −1005.2 | −1004.94 | 2.6e-4 | p. 61 |
 
 † B-13: the published 1.51 is a truncation of 1.517 obtained from the source's own rounded
 `a`, `b`; the tolerance for this vector is set to 6e-3 and the reason recorded.
+
+**B-18 is pure statics** — no `g`, no tire model, no speed. With the side force applied
+`d` = 1.5 ft ahead of the CG, moment balance about each axle in turn gives
+`F_yF = −F·(b + d)/ℓ` and `F_yR = −F·(a − d)/ℓ`, i.e. −74.2249 and −25.7751 lbf for
+`ℓ` = 104.5 in and 57 % front. The two SHALL sum to `−F` and SHALL satisfy
+`a·F_yF − b·F_yR = −F·d` to machine precision; a computed pair that misses the second
+identity has the wrong moment arm, which is the failure this vector exists to catch.
 
 Reference vehicle **"First Example"** ([RCVD] p. 256, [R280] p. 74): W = 2000 lbf,
 ℓ = 8.33 ft, `I_z` = 832 slug·ft², 65 % front, `C_F = −240`, `C_R = −200` lbf/deg,
@@ -2395,9 +2500,9 @@ quantitative basis for the statement that tire pressure does not tune ride rate.
 | F-01 | Static loads, 3700 lbf, 57/43 [lbf] | 1054.5 / 795.5 | exact | p. 214 |
 | F-02 | Longitudinal transfer, h/ℓ = 20/104.5, 0.4 g [lbf] | 283.2 | 283.25 | p. 214 |
 | F-03 | Lateral transfer, h/t = 20/60, 0.4 g [lbf] | 493.3 | 493.33 | p. 214 |
-| F-04 | Banked corner, **W = 3500 lbf**, 150 mph, R = 600 ft, 20° bank: A_Y [g] | 2.50 | 2.5072 | p. 215 |
-| F-05 | Same: normal load W_e [lbf] | 6290 | 6290.2 | p. 215 |
-| F-06 | Same: required lateral force [lbf] | 7050 | 7048.9 | p. 215 |
+| F-04 ‡ | Banked corner, **W = 3500 lbf**, 150 mph, R = 600 ft, 20° bank: A_Y [g] | 2.50 | 2.5072 | p. 215 |
+| F-05 ‡ | Same: normal load W_e [lbf] | 6290 | 6290.2 | p. 215 |
+| F-06 ‡ | Same: required lateral force [lbf] | 7050 | 7048.9 | p. 215 |
 | F-07 | Pair analysis, FLT front at 0.35 g, h_e/t = 16.5/61.5 (W = 3700 lbf, 57 % front ⇒ W_F = 2109 lbf) | 0.188 | 0.1878 | p. 90 |
 | F-08 | Pair analysis, inside-rear lift at h_e/t = 23.5/57.8 [g] | 1.23 | 1.2298 | p. 91 |
 | F-09 | Sustainable A_Y, front axle: η = 16.5/61.5, pW = 2109 lbf, μ = 1.22 − 2.4e−4·F_z | 0.907 | 0.90698 | p. 92 |
@@ -2405,6 +2510,22 @@ quantitative basis for the statement that tire pressure does not tune ride rate.
 | F-11 | Invariant I-3 (9.10) over 2000 random parameter sets | — | max rel. residual 6.0e−16 |
 | F-11b | Invariant I-3b (9.10b) over 2000 random parameter sets, both signs of A_Y | — | max rel. residual < 1e−15; transfers exactly odd in A_Y |
 | F-12 | Load-transfer gradient sweep, **Case 1** (below), `z_RF` 0→16 in ([R280] Fig. 18.2) | ≈300→440 F, ≈370→232 R | 313.7→437.5 F, 380.4→237.5 R |
+
+‡ **F-04 … F-06 are not P2 model outputs.** The §9.3 load model of Rev 1.0 is flat-surface
+only: Step 1 takes the static loads as `m g·b/ℓ` with no `cos θ_t`, and `road_tilt` enters
+the suite solely through the `m g sin θ_t` term of (9.11). There is therefore no path by
+which P2 as specified produces a banked-corner wheel load. These three vectors verify the
+**closed-form pair-analysis** relations
+
+```
+Ā_Y = V²/(g R) ,   W_e = W·(cos θ_t + Ā_Y sin θ_t) ,   F_y,req = W·(Ā_Y cos θ_t − sin θ_t)
+                                                                               (17.2)
+```
+
+which the implementation SHALL provide as an analytic utility alongside P2, exactly as
+F-09/F-10 are provided for (17.1). Banked-corner load transfer through the full §9.3 chain
+is extension seam 11 (§20). Until then the GUI SHALL disable `road_tilt` for P2 wheel-load
+output, or state that the reported loads are the flat-surface values.
 
 **F-12 Case-1 vehicle (fully specified).** `W = W_s = 2000 lbf` (no unsprung mass),
 `t_F = t_R = 60 in`, `a_s/ℓ = 0.50`, `h_s = 20 in`, `z_RR = 4 in`, `K_φF = K_φR` with
@@ -2495,7 +2616,7 @@ to the limit.
 | ID | Check |
 |----|-------|
 | C-01 | I-4: P3 max trimmed `A_Y` vs P1 steady-state limit, same vehicle — within 2 % |
-| C-02 | P2 in **bicycle-equivalence mode** reproduces P1 to 1e-10. That mode is an explicit, tested configuration — `load_transfer: off`, `aero: off`, tire model L1, `track_velocity_terms: off` (drops the `± r·t/2` of (9.14)), `small_angle_slip: on` (uses `v/u` rather than `arctan`), `aligning_moment: off`, `longitudinal_forces: off` — not an emergent property. Each switch SHALL exist in `SolverConfig` and SHALL be individually tested. |
+| C-02 | P2 in **bicycle-equivalence mode** reproduces P1 to 1e-10. That mode is an explicit, tested configuration — `load_transfer: off`, `aero: off`, tire model L1, `track_velocity_terms: off` (drops the `± r·t/2` of (9.14)), `small_angle_slip: on` (uses `v/u` rather than `arctan`), `steer_projection: off` (drops the `cos δ`/`sin δ` factors of (9.11)–(9.13)), `aligning_moment: off`, `longitudinal_forces: off` — not an emergent property. Each switch SHALL exist in `SolverConfig` and SHALL be individually tested. **`steer_projection` is not optional for this test:** P1's (8.1) sums the axle forces unprojected, so retaining `cos δ` leaves a residual of `1 − cos δ` — 1.5e−4 at δ = 1°, 3.8e−3 at δ = 5° — which exceeds the 1e−10 criterion at every steer angle that produces a measurable response. |
 | C-03 | P4 with the P1 plant and P5 with a P2 plant configured as in C-02 produce identical lap times to 1e-9 s |
 | C-04 | P6 output fed into P2 as chassis-to-ground roll stiffnesses reproduces the target roll gradient to 1e-9, using the exact inversion (12.11) — i.e. against R-01b (1368.07 lbf·ft/deg), not the source's simplified R-01 (1300), which lands at 3.166 deg/g |
 | C-05 | Understeer gradient agrees across three independent routes: (8.18) analytic, P2 slow-ramp simulation, P3 diagram inversion — within 2 % |
@@ -2572,7 +2693,7 @@ restructuring:
 1. **Roll as a dynamic DOF.** The three-equation Segel form is already the target shape:
    ```
    m V(r + β̇) + m_s h₂ φ̈           = Y_β β + Y_r r + Y_φ φ + Y_δ δ
-   I_x' ṙ·0 + I_z ṙ + I_xz φ̈        = N_β β + N_r r + N_φ φ + N_δ δ
+   I_z ṙ + I_xz φ̈                   = N_β β + N_r r + N_φ φ + N_δ δ
    I_x φ̈ + I_xz ṙ + m_s h₂ V(r+β̇)  = L_β β + L_φ φ + L_φ̇ φ̇
    ```
    with `h₂` the sprung-CG-to-roll-axis distance of (9.4b) and inertias taken about the
@@ -2603,6 +2724,11 @@ restructuring:
 9. **Four-wheel MMM.** Replace the static axle loads in (10.4) with the §9.3 load model.
 10. **Optimisation.** The sweep API plus a Pareto front over (lap time, robustness) is the
     natural home for the multi-radius set-up trade-off exercised by P5.
+11. **Banked and graded surfaces in the load model.** §9.3 Steps 1–5 are flat-surface;
+    `road_tilt` reaches only (9.11). Adding `cos θ_t` to (9.1), the `m g sin θ_t`
+    contribution to the roll moment of (9.5), and a road-grade term to (9.12) turns the
+    closed forms of (17.2) into a model result and promotes F-04 … F-06 from analytic
+    checks to P2 acceptance vectors. No interface changes.
 
 ---
 
@@ -2613,6 +2739,7 @@ restructuring:
 | 3.1 | Slip angle definitions | §3.3 |
 | 5.1a–5.1c | Sprung/unsprung mass, CG-height and CG-position consistency | §5.1 |
 | 6.1–6.3 | Linear and breakaway tire | §6.2–6.3 |
+| 6.2a | Pneumatic trail, limit form (T8) | §6.1 |
 | 6.4–6.7 | Radt non-dimensionalisation and expansion | §6.5 |
 | 6.8 | Magic Formula | §6.6 |
 | 6.9–6.10 | Load sensitivity | §6.7 |
@@ -2630,18 +2757,19 @@ restructuring:
 | 9.7 | Wheel-load assembly | §9.3 |
 | 9.8–9.9 | Transfer and fraction-load-transfer definitions | §9.4 |
 | 9.10, 9.10b | Invariants I-3 and I-3b | §9.5 |
-| 9.11–9.15 | Four-wheeler EOM and algebraic loop | §9.6–9.7 |
+| 9.11–9.15 | Four-wheeler EOM and algebraic loop (9.12a defines `A_X`) | §9.6–9.7 |
 | 10.1–10.10 | Moment method (10.3a/10.3b normalised pair) | §10 |
 | 11.1 | Lap detection | §11.4 |
 | 12.1–12.12 | Ride and roll rates | §12 |
 | 13.1–13.2 | Step control and differentiation step | §13 |
 | 17.1 | Load-sensitive pair-analysis quadratic | §17.5 |
+| 17.2 | Banked-corner pair analysis (F-04 … F-06) | §17.5 |
 
 ## Appendix B — Invariant Index (all normative)
 
 | ID | Statement | Tolerance |
 |----|-----------|-----------|
-| T1–T7 | Tire model contract (symmetry, zero crossing, sign, zero load, friction bound, slope consistency, continuity) | 1e-12 / 1e-6 |
+| T1–T8 | Tire model contract (symmetry, zero crossing, sign, zero load, friction bound, slope consistency, continuity, finite trail) | 1e-12 / 1e-6 |
 | I-1 | `K·ℓ·g = W_F/\|C_F\| − W_R/\|C_R\|` | 1e-12 |
 | I-2 | Yaw-rate gain: derivative form = `(V/ℓ)/(1+KV²)` = TF DC gain | 1e-14 |
 | I-3 | Summed axle roll moments = sprung + unsprung applied moments | 1e-12 |
