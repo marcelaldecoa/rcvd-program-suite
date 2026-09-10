@@ -2660,6 +2660,41 @@ to the limit.
 C-02 is the single most valuable structural test in the suite: it forces P1 and P2 to share
 one force path rather than two implementations that drift apart.
 
+**Which switches C-02 can and cannot exercise.** "Individually tested" above cannot mean
+"individually tested *through C-02*", because two of the switches are **provably inert in
+C-02's own configuration**. C-02 mandates tire model L1, and an L1 tire with a constant
+`C_α` has `F_y` independent of `F_z`. Both `load_transfer` and `aero` reach the lateral
+force *only* through `F_z` — load transfer by redistributing it, downforce by adding to it —
+so with a constant-stiffness tire that path is severed and neither switch can change the
+result. This is §6.7's own observation ("a build in which (6.9)/(6.10) is disabled SHALL
+make P2's roll-stiffness distribution input inert") applied to C-02.
+
+Measured on the CH5 fixture at 30 mph, `δ = 5°`, `v = 1.5 m/s`, `r = 0.35 rad/s`, as the
+relative change in the state derivative when each switch is returned to `true`:
+
+| Switch | Effect under C-02's L1 tire | Effect with a load-sensitive (6.10) tire |
+|---|---|---|
+| `track_velocity_terms` | 6.6e−4 | — |
+| `small_angle_slip` | 2.4e−2 | — |
+| `steer_projection` | 6.3e−3 | — |
+| `load_transfer` | **0 (exactly)** | 2.2e−1 |
+| `aero` | **0 (exactly)** | 2.8e−2 |
+| `aligning_moment` | 0 — L1 with `t_p = 0` returns `M_z = 0` | — |
+| `longitudinal_forces` | 0 — Rev 1.0 has no driveline, so `F_x ≡ 0` | — |
+
+The acceptance suite SHALL therefore test `track_velocity_terms`, `small_angle_slip` and
+`steer_projection` by requiring each to **break** C-02 when returned to `true`, and SHALL
+test `load_transfer` and `aero` separately, against a load-sensitive tire, by requiring each
+to change P2's own output. `aligning_moment` and `longitudinal_forces` are carried in the
+mode for correctness under models that do produce those terms, and are untestable until
+such a model exists (extension seams 3 and 7).
+
+**A trap when testing switches pointwise.** Under `load_transfer_coupling: explicit` — the
+default — `A_Y` comes from the *previous* accepted step, so the very first `derivative()`
+call of a run sees `A_Y = 0` and therefore **no lateral load transfer at all**. A single
+evaluation will report `load_transfer` as inert even with a load-sensitive tire. A pointwise
+switch test SHALL use `implicit` coupling, or iterate the explicit map to its fixed point.
+
 ---
 
 ## 18. Non-Functional Requirements
