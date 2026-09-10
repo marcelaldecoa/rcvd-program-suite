@@ -23,7 +23,7 @@ Following the build order of spec Appendix C:
 | 7 | `analysis::moment_method` → §17.6, I-4 | **done** — plus C-01 |
 | 8 | `analysis::ride_roll` → R-01 … R-14, I-5 | **done** — plus C-04 |
 | 9 | `analysis::lap_solve` + event location → S-01 … S-05 | **done** — plus C-03 |
-| 10 | `io`, `capi`, `rcvd-cli` | **partial** — JSON, §5 document layer, §15.1 CSV and §4.5 manifest done; `capi` and `rcvd-cli` outstanding |
+| 10 | `io`, `capi`, `rcvd-cli` | **partial** — JSON, §5 documents, §15.1 CSV, §4.5 manifest and `rcvd-cli` done; `capi` outstanding |
 | 11 | `app` (GUI) + §18.3 interface-equivalence gate | not started |
 
 Both hard gates are passed: B-01 … B-31 (step 5) and I-3/I-3b/I-3c + C-02
@@ -101,6 +101,7 @@ include/rcvd/
              roots.hpp       Brent (§13.7) + the (13.2) differentiation step
              linalg.hpp      LU with partial pivoting and rcond (§13.8)
              integrate.hpp   RK4 fixed, DOPRI5(4) with dense output (§13.2)
+             accumulate.hpp  Neumaier compensated summation (§13.1, A2)
   tire/      tire_model.hpp  the §6.1 contract; TireState/TireOutput (§4.3)
              linear.hpp      L1 (6.1) and L2 (6.3), with (6.10) load sensitivity
              conformance.hpp the shared T1-T8 check, applied to every model
@@ -114,15 +115,47 @@ include/rcvd/
              ride_roll.hpp   P6: §12 springing algebra, both directions
              moment_method.hpp  P3: §10 sweep, boundary, trim line, metrics
              lap_solver.hpp  P4/P5: §11 run driver with dense-output events
-  io/        json.hpp        minimal JSON/jsonc reader and writer
+  io/        display.hpp     Rule U2's display boundary, SI or US customary
+             json.hpp        minimal JSON/jsonc reader and writer
              document.hpp    §5 document layer, Rule U2's input boundary
              csv.hpp         §15.1 RFC 4180 output, %.17g lossless
              manifest.hpp    §4.5 run manifest
 tests/       Catch2 v3 suite, authoritative
   support/   defective_tire.hpp — fault injection for the conformance suite
              fixtures.hpp       — CH5, CH5-OS and "First Example" (§17.2)
+app/         rcvd_cli.cpp — the §4.1 command-line front end
+examples/    ch5.json — the §17.2 reference vehicle as a §5.1 document
 tools/       verify_standalone.cpp — dependency-free mirror
+             check_compile_fail.py — the Rule U6 negative cases
 ```
+
+## Units: SI inside, your choice outside
+
+Rule U1 makes the core compute in strict SI, always. Rule U2 allows exactly two
+conversions per data path — one on input, one on display — so the output system
+is a presentation choice that provably cannot reach a computed value:
+
+```bash
+rcvd-cli derivs --vehicle examples/ch5.json --units us --in-units us          --cf -640 --cr -580 --speed 30
+```
+
+```
+  Y_beta            -1220  lbf/deg          B-03
+  Y_r             10.9646  lbf*s/deg        B-04
+  Y_delta             640  lbf/deg          B-05
+  N_beta          482.442  lbf*ft/deg       B-06
+  N_r            -528.739  lbf*ft*s/deg     B-07
+  N_delta         2396.53  lbf*ft/deg       B-08
+  K_us           0.552209  deg/g            B-26
+```
+
+`--units si` prints the same run in N/rad and N*m/rad. The lap solver gives a
+lap time identical to all printed digits either way, because the display system
+is applied after the last arithmetic.
+
+"American format" is not one convention — §17.2 quotes speeds in both ft/s and
+mph on the same page — so `DisplayUnits` takes per-dimension overrides on top of
+whichever system is selected.
 
 ## Conventions that bite
 

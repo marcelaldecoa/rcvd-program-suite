@@ -15,6 +15,7 @@
 
 #include "rcvd/core/result.hpp"
 #include "rcvd/models/plant.hpp"
+#include "rcvd/numerics/accumulate.hpp"
 #include "rcvd/numerics/integrate.hpp"
 #include "rcvd/numerics/roots.hpp"
 
@@ -126,6 +127,13 @@ struct TransientContext {
     if (static_cast<int>(icfg.atol.size()) < n) icfg.atol.resize(static_cast<std::size_t>(n), icfg.atol.empty() ? 1e-9 : icfg.atol.back());
 
     numerics::DenseSegment seg;
+    // §13.1 / Rule A2: both of these are summed once per step over thousands of
+    // steps, and both are compared against a fixed target — t against §11.4's
+    // 1e-9 s event tolerance, theta against (11.1)'s 2*pi. Compensated summation
+    // keeps their error O(eps) rather than O(n*eps), at a fixed operation order so
+    // the run stays bit-reproducible.
+    numerics::CompensatedSum clock;
+    numerics::CompensatedSum theta;
     double t = 0.0, h = cfg.initial_step_s;
     double theta_acc = 0.0;             // accumulated path angle about the centre
     double next_record = 0.0;
@@ -274,8 +282,10 @@ struct TransientContext {
         }
 
         // Commit the step.
-        theta_acc += dtheta_full;
-        t = t1;
+        theta.add(dtheta_full);
+        theta_acc = theta.value();
+        clock.add(h_try);
+        t = clock.value();
         x = seg.y1;
         if (next_stop < stops.size() && t >= stops[next_stop] - 1e-15) ++next_stop;
     }

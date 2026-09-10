@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "name": "CH5",
+  "inertia": {
+    "weight":      {"value": 3700, "unit": "lbf"},
+    "yaw_inertia": {"value": 1800, "unit": "slug*ft^2"},
+    "unsprung_weight_front": {"value": 240, "unit": "lbf"},
+    "unsprung_weight_rear":  {"value": 260, "unit": "lbf"},
+    "unsprung_cg_height_front": {"value": 11, "unit": "in"},
+    "unsprung_cg_height_rear":  {"value": 11, "unit": "in"}
+  },
+  "geometry": {
+    "wheelbase":   {"value": 104.5, "unit": "in"},
+    "front_weight_fraction": 0.57,
+    "track_front": {"value": 60, "unit": "in"},
+    "track_rear":  {"value": 60, "unit": "in"},
+    "cg_height":   {"value": 20, "unit": "in"}
+  },
+  "steering": {"ratio": 14.0}
+}

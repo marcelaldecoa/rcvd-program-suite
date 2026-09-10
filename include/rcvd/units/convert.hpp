@@ -29,6 +29,8 @@ enum class Dim {
     Stiffness,          // N/m          (spring / tire rate)
     AngularStiffness,   // N*m/rad      (roll stiffness)
     CorneringStiffness, // N/rad
+    SideForceDamping,   // N*s/rad     (Y_r)
+    YawDamping,         // N*m*s/rad   (N_r)
     Moment,             // N*m
     Time,
     Density,            // kg/m^3
@@ -73,6 +75,13 @@ inline constexpr UnitEntry kVocabulary[] = {
     {"N/rad",         Dim::CorneringStiffness, 1.0},
     {"lbf/deg",       Dim::CorneringStiffness, LBF_PER_DEG_TO_N_PER_RAD},
     {"lbf/rad",       Dim::CorneringStiffness, POUND_FORCE},
+    // Y_r and N_r. Distinct dimensions from the stiffnesses they are so often
+    // displayed with; giving them their own entries is what lets the US display
+    // path express B-04 and B-07 at all.
+    {"N*s/rad",       Dim::SideForceDamping,   1.0},
+    {"lbf*s/deg",     Dim::SideForceDamping,   LBF_PER_DEG_TO_N_PER_RAD},
+    {"N*m*s/rad",     Dim::YawDamping,         1.0},
+    {"lbf*ft*s/deg",  Dim::YawDamping,         LBF_FT_PER_DEG_TO_NM_PER_RAD},
     {"N*m",           Dim::Moment,             1.0},
     {"lbf*ft",        Dim::Moment,             POUND_FORCE * FOOT},
     {"s",             Dim::Time,               1.0},

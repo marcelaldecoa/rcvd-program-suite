@@ -95,6 +95,12 @@ add_library(rcvd::aero     ALIAS rcvd_aero)
 add_library(rcvd::analysis ALIAS rcvd_analysis)
 add_library(rcvd::io       ALIAS rcvd_io)
 
+# §4.1 / §16.2: the command-line front end. Rule A1 makes it thin — no equation
+# and no unit conversion beyond calling io/display.
+add_executable(rcvd-cli app/rcvd_cli.cpp)
+target_link_libraries(rcvd-cli PRIVATE
+  rcvd::core rcvd::models rcvd::analysis rcvd::io rcvd::tire rcvd::aero rcvd_flags)
+
 if(RCVD_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)

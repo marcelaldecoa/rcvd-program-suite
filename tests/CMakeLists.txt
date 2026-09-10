@@ -18,7 +18,8 @@ add_executable(rcvd_tests
   test_moment_method.cpp
   test_lap_solver.cpp
   test_io.cpp
-  test_quantity.cpp)
+  test_quantity.cpp
+  test_display.cpp)
 
 target_include_directories(rcvd_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
