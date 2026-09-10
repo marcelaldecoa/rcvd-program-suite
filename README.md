@@ -30,29 +30,62 @@ Both hard gates are passed: B-01 … B-31 (step 5) and I-3/I-3b/I-3c + C-02
 (step 6). **All five cross-checks C-01 … C-05 hold**, and the behavioural
 vectors X-01 … X-13 pass. Only step 11 remains, and it needs Qt.
 
-## Building
+## Testing
 
-Requires CMake ≥ 3.24 and a C++20 compiler. Catch2 v3 is fetched automatically.
+Three ways in, in increasing order of what they need installed.
+
+### 1. One command, nothing to install
+
+```powershell
+pwsh tools/run_tests.ps1
+```
+
+Finds the compiler itself (or use it from a *Developer PowerShell for VS*),
+builds the dependency-free acceptance driver, runs it, then runs the Rule U6
+compile-failure gate. Prints `ALL GREEN` and exits 0 on success.
+
+### 2. By hand, if you prefer
 
 ```bash
+cl /nologo /std:c++20 /EHsc /W4 /WX /permissive- /fp:precise /I include /I tests /Fe:verify.exe tools/verify_standalone.cpp
+verify.exe
+```
+
+Note **both** include paths: `tools/verify_standalone.cpp` pulls in the shared
+fixtures under `tests/support`, so `/I include` alone will not compile. 225
+assertions covering B-01 … B-31, F-01 … F-12, R-01 … R-14, the tire conformance
+fault injection and the numerics.
+
+The Rule U6 gate is separate, because it asserts that certain files **fail** to
+build and so cannot live in a passing translation unit:
+
+```bash
+python tools/check_compile_fail.py --compiler cl --include include
+```
+
+### 3. The authoritative suite — needs CMake
+
+`tests/` is the real suite (spec §4.2 mandates Catch2 v3): 17 files, ~7,900
+checks, including everything above plus the C ABI equivalence gate, the §17.3
+transients, the moment method, the lap solver and the §14.2 diagnostic-coverage
+gate.
+
+```bash
+winget install Kitware.CMake
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-### Without CMake
+Catch2 is fetched automatically. **This has not yet been run** — this machine has
+MSVC 14.44 but no CMake, so `tests/` has been type-checked and executed against a
+local shim rather than real Catch2. Path 1 is what has actually been verified.
 
-This machine has MSVC 14.44 but no CMake or Ninja, so the Catch2 suite in
-`tests/` has not yet been executed against real Catch2 — it has been
-type-checked and run against a local shim only. `tools/verify_standalone.cpp`
-mirrors the same assertions with no dependencies, and **is** verified:
+## Building
 
-```bash
-cl /nologo /std:c++20 /EHsc /W4 /WX /permissive- /fp:precise /I include /Fe:verify.exe tools/verify_standalone.cpp
-```
-
-225 assertions, all passing. To get the authoritative suite running,
-`winget install Kitware.CMake` and use the CMake path above.
+Requires CMake ≥ 3.24 and a C++20 compiler. The CMake configure step fails
+outright if any `-ffast-math`-family flag is present, rather than leaving it to
+the Appendix D audit.
 
 ## The conformance suite is itself tested
 
