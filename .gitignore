@@ -4,3 +4,4 @@ out/
 *.obj
 *.pdb
 *.ilk
+rcvd-cli.exe

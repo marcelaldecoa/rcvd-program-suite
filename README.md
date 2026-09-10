@@ -81,6 +81,55 @@ Catch2 is fetched automatically. **This has not yet been run** — this machine 
 MSVC 14.44 but no CMake, so `tests/` has been type-checked and executed against a
 local shim rather than real Catch2. Path 1 is what has actually been verified.
 
+## Running the CLI
+
+```powershell
+pwsh tools/build_cli.ps1        # produces .cvd-cli.exe
+.cvd-cli.exe --help
+```
+
+`rcvd-cli` is a single translation unit — everything it needs is header-only —
+so it needs no linker configuration and no CMake.
+
+Three commands, all taking a §5.1 vehicle document:
+
+```powershell
+# stability derivatives and handling metrics (B-03 ... B-08, B-10, B-11, B-26)
+.cvd-cli.exe derivs --vehicle examples/ch5.json --units us --in-units us `
+                --cf -640 --cr -580 --speed 30
+
+# steady-state response at a given steer angle
+.cvd-cli.exe steady --vehicle examples/ch5.json --units us --in-units us `
+                --cf -640 --cr -580 --speed 30 --steer 3
+
+# a lap of a circular circuit, optionally writing the path and a run manifest
+.cvd-cli.exe lap --vehicle examples/ch5.json --units us --in-units us `
+                --cf -640 --cr -580 --speed 27.3 --steer 3.99 `
+                --inner 100 --outer 400 --start 150 `
+                --csv path.csv --manifest run.json
+```
+
+`--in-units` and `--units` are independent, so US-customary input can print as SI
+and vice versa. Cornering stiffnesses are **axle** values and must be negative
+(§3.3). Everything between the two unit boundaries is SI (Rule U1), which is why
+the lap time is identical to all printed digits whichever display system you pick.
+
+## Running the GUI
+
+**There is no GUI yet.** Spec §16 calls for Qt 6 Widgets and it is Appendix C
+step 11 — the one stage not yet built, because Qt is not installed on this
+machine and GUI code that cannot be compiled or run is worse than none.
+
+When it is built, Rule A1 (§4.1) constrains what it may contain: no equation, no
+unit conversion beyond calling `io/display`, and no numerical algorithm. Every
+GUI action must map to an `rcvd-cli` invocation, and §16.2 requires the window to
+be able to display the equivalent CLI command for its current configuration.
+Until then, `rcvd-cli` reaches everything the GUI would.
+
+Note that this also leaves the last third of §18.3 open: the GUI, CLI and C API
+must agree bit-for-bit, and only the C++/C half of that is currently closed
+(`tests/test_capi.cpp`).
+
 ## Building
 
 Requires CMake ≥ 3.24 and a C++20 compiler. The CMake configure step fails
