@@ -19,13 +19,14 @@ add_executable(rcvd_tests
   test_lap_solver.cpp
   test_io.cpp
   test_quantity.cpp
-  test_display.cpp)
+  test_display.cpp
+  test_capi.cpp)
 
 target_include_directories(rcvd_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(rcvd_tests PRIVATE
   rcvd::units rcvd::core rcvd::numerics rcvd::tire rcvd::models
-  rcvd::aero rcvd::analysis rcvd::io
+  rcvd::aero rcvd::analysis rcvd::io rcvd::capi
   rcvd_flags
   Catch2::Catch2WithMain)
 

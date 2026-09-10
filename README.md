@@ -23,8 +23,8 @@ Following the build order of spec Appendix C:
 | 7 | `analysis::moment_method` → §17.6, I-4 | **done** — plus C-01 |
 | 8 | `analysis::ride_roll` → R-01 … R-14, I-5 | **done** — plus C-04 |
 | 9 | `analysis::lap_solve` + event location → S-01 … S-05 | **done** — plus C-03 |
-| 10 | `io`, `capi`, `rcvd-cli` | **partial** — JSON, §5 documents, §15.1 CSV, §4.5 manifest and `rcvd-cli` done; `capi` outstanding |
-| 11 | `app` (GUI) + §18.3 interface-equivalence gate | not started |
+| 10 | `io`, `capi`, `rcvd-cli` | **done** |
+| 11 | `app` (GUI) + §18.3 interface-equivalence gate | not started — the C++/C half of §18.3 is closed; the GUI half needs Qt |
 
 Both hard gates are passed: B-01 … B-31 (step 5) and I-3/I-3b/I-3c + C-02
 (step 6). Cross-checks C-01, C-02, C-03 and C-04 all hold; C-05 waits on a
@@ -115,6 +115,7 @@ include/rcvd/
              ride_roll.hpp   P6: §12 springing algebra, both directions
              moment_method.hpp  P3: §10 sweep, boundary, trim line, metrics
              lap_solver.hpp  P4/P5: §11 run driver with dense-output events
+  capi/      rcvd.h          the §4.1 extern "C" ABI (pure C)
   io/        display.hpp     Rule U2's display boundary, SI or US customary
              json.hpp        minimal JSON/jsonc reader and writer
              document.hpp    §5 document layer, Rule U2's input boundary
@@ -123,6 +124,7 @@ include/rcvd/
 tests/       Catch2 v3 suite, authoritative
   support/   defective_tire.hpp — fault injection for the conformance suite
              fixtures.hpp       — CH5, CH5-OS and "First Example" (§17.2)
+src/capi/    rcvd_capi.cpp — the C ABI implementation
 app/         rcvd_cli.cpp — the §4.1 command-line front end
 examples/    ch5.json — the §17.2 reference vehicle as a §5.1 document
 tools/       verify_standalone.cpp — dependency-free mirror

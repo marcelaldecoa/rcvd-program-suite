@@ -95,6 +95,16 @@ add_library(rcvd::aero     ALIAS rcvd_aero)
 add_library(rcvd::analysis ALIAS rcvd_analysis)
 add_library(rcvd::io       ALIAS rcvd_io)
 
+# §4.1: the extern "C" ABI that the Python, C# and MATLAB bindings consume.
+# The only compiled target so far; everything below it is header-only.
+add_library(rcvd_capi src/capi/rcvd_capi.cpp)
+target_include_directories(rcvd_capi PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_link_libraries(rcvd_capi
+  PUBLIC  rcvd::core
+  PRIVATE rcvd::models rcvd::analysis rcvd::io rcvd_flags)
+add_library(rcvd::capi ALIAS rcvd_capi)
+
 # §4.1 / §16.2: the command-line front end. Rule A1 makes it thin — no equation
 # and no unit conversion beyond calling io/display.
 add_executable(rcvd-cli app/rcvd_cli.cpp)
