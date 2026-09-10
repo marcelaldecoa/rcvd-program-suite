@@ -15,7 +15,7 @@ Following the build order of spec Appendix C:
 | # | Component | State |
 |---|-----------|-------|
 | 1 | `units` — exact constants, closed vocabulary, round-trip | **done** |
-| 2 | `core` — `Result<T>`/`Diagnostic`, §14.2 register, `Vehicle` | **partial** — error channel, `Vehicle` and (5.1a–c) validation done; JSON schema outstanding |
+| 2 | `core` — `Result<T>`/`Diagnostic`, §14.2 register, `Vehicle` | **done** — document layer landed with step 10 |
 | 3 | `numerics` — PCHIP, Brent, LU + `rcond`, RK4, DOPRI5(4) dense output | **done** |
 | 4 | `tire` — L1, L2, conformance T1–T8, then L3/L4/L5 | **partial** — L1, L2 and the shared T1–T8 suite done; L3/L4/L5 outstanding |
 | 5 | `models::BicycleModel` + `analysis` → B-01 … B-31 | **done** — gate passed |
@@ -23,7 +23,8 @@ Following the build order of spec Appendix C:
 | 7 | `analysis::moment_method` → §17.6, I-4 | **done** — plus C-01 |
 | 8 | `analysis::ride_roll` → R-01 … R-14, I-5 | **done** — plus C-04 |
 | 9 | `analysis::lap_solve` + event location → S-01 … S-05 | **done** — plus C-03 |
-| 10–11 | io/capi/cli, GUI | not started |
+| 10 | `io`, `capi`, `rcvd-cli` | **partial** — JSON, §5 document layer, §15.1 CSV and §4.5 manifest done; `capi` and `rcvd-cli` outstanding |
+| 11 | `app` (GUI) + §18.3 interface-equivalence gate | not started |
 
 Both hard gates are passed: B-01 … B-31 (step 5) and I-3/I-3b/I-3c + C-02
 (step 6). Cross-checks C-01, C-02, C-03 and C-04 all hold; C-05 waits on a
@@ -113,6 +114,10 @@ include/rcvd/
              ride_roll.hpp   P6: §12 springing algebra, both directions
              moment_method.hpp  P3: §10 sweep, boundary, trim line, metrics
              lap_solver.hpp  P4/P5: §11 run driver with dense-output events
+  io/        json.hpp        minimal JSON/jsonc reader and writer
+             document.hpp    §5 document layer, Rule U2's input boundary
+             csv.hpp         §15.1 RFC 4180 output, %.17g lossless
+             manifest.hpp    §4.5 run manifest
 tests/       Catch2 v3 suite, authoritative
   support/   defective_tire.hpp — fault injection for the conformance suite
              fixtures.hpp       — CH5, CH5-OS and "First Example" (§17.2)

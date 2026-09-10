@@ -2282,6 +2282,10 @@ document. Solvers do not re-validate per step; they assert.
 | `E-RR-020` | Desired roll stiffness ≥ tire roll stiffness |
 | `E-NUM-300` | Root bracket contains no sign change |
 | `E-NUM-310` | Speed below floor in a speed-normalised expression |
+| `E-IO-001` | Malformed JSON document |
+| `E-IO-002` | Missing or incompatible `schema_version` (major-version mismatch, §5) |
+| `E-IO-003` | Missing, malformed, or unit-less document field — including a dimensional coefficient given as a bare number (§5.2) |
+| `E-IO-004` | Tabular output channels are inconsistent (ragged, or a display unit outside the closed vocabulary) |
 | `W-TIRE-101` | Load beyond the maximum of the quadratic `C_α(F_z)` |
 | `W-VEH-120` | Roll-axis inclination beyond the small-angle assumption |
 | `W-VEH-141` | Roll gradient outside the physical band of (9.10c) — suspect `K_φ` units |

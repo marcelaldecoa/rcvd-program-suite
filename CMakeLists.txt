@@ -81,6 +81,11 @@ target_include_directories(rcvd_models INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(rcvd_models INTERFACE rcvd_core rcvd_numerics rcvd_tire rcvd_aero)
 
+add_library(rcvd_io INTERFACE)
+target_include_directories(rcvd_io INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_link_libraries(rcvd_io INTERFACE rcvd_core rcvd_tire)
+
 add_library(rcvd::units    ALIAS rcvd_units)
 add_library(rcvd::core     ALIAS rcvd_core)
 add_library(rcvd::numerics ALIAS rcvd_numerics)
@@ -88,6 +93,7 @@ add_library(rcvd::tire     ALIAS rcvd_tire)
 add_library(rcvd::models   ALIAS rcvd_models)
 add_library(rcvd::aero     ALIAS rcvd_aero)
 add_library(rcvd::analysis ALIAS rcvd_analysis)
+add_library(rcvd::io       ALIAS rcvd_io)
 
 if(RCVD_BUILD_TESTS)
   enable_testing()

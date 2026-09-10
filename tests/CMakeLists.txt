@@ -16,13 +16,14 @@ add_executable(rcvd_tests
   test_four_wheeler.cpp
   test_ride_roll.cpp
   test_moment_method.cpp
-  test_lap_solver.cpp)
+  test_lap_solver.cpp
+  test_io.cpp)
 
 target_include_directories(rcvd_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(rcvd_tests PRIVATE
   rcvd::units rcvd::core rcvd::numerics rcvd::tire rcvd::models
-  rcvd::aero rcvd::analysis
+  rcvd::aero rcvd::analysis rcvd::io
   rcvd_flags
   Catch2::Catch2WithMain)
 
