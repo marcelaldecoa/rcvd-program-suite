@@ -1913,10 +1913,30 @@ reaches the steady-state circular path. During that transient the path is not co
 with the intended circle, and the steady-state circle it eventually settles on is offset
 inward.
 
-The program SHALL make this diagnosable rather than mysterious: on `EV-WALL-IN` within the
-first `5τ` seconds it SHALL emit hint `H-SPD-001` naming the initial-transient cause and
+The program SHALL make this diagnosable rather than mysterious: on `EV-WALL-IN` that is
+attributable to the initial transient it SHALL emit hint `H-SPD-001` naming that cause and
 suggesting the two remedies (reduce steer angle slightly, or start further from the wall),
 together with the computed `τ` and the steady-state path radius the current inputs imply.
+
+**Attribution test (normative).** The hint SHALL fire when **both** hold:
+
+1. the contact occurs within the **first revolution** (accumulated path angle < 2π), and
+2. the steady-state path radius the current inputs imply, `R_ss = V/(r/δ · δ)` from (8.15),
+   is **at least the inner radius** — i.e. the vehicle *would* have cleared the wall once
+   settled, so only the transient offset explains the contact.
+
+When (2) fails the steer is simply too tight for the circuit and the hint SHALL NOT fire;
+that is a different fault with different advice.
+
+**Not `t < 5τ`.** An earlier form of this rule used a fixed multiple of the yaw time
+constant, which misses the failure this section is about by two orders of magnitude. The
+transient *causes* the inward offset within a few `τ`, but the offset circle's closest
+approach to the wall occurs up to **half a revolution later**, so the governing time scale
+is the lap period, not `τ`. Measured on the CH5 fixture at 40 ft/s on a 50 ft inner radius:
+`τ_dominant` = 0.0593 s, so `5τ` = 0.297 s, while contact from the tangentially-started
+optimum occurs at **1.77 – 3.33 s**, i.e. 30–56 `τ`, against a half-lap time of
+`πR/V` = 3.93 s. A `5τ` window fires only when the vehicle is already pointed into the
+wall at `t = 0`, which is a different — and much less instructive — failure.
 
 ### 11.7 Real-time display
 
