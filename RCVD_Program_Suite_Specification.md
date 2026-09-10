@@ -2475,8 +2475,37 @@ Additional invariant vectors:
 | X-09 | Steer period 0.051 s at Δt = 0.1 s | Aliasing: apparent period far longer than input |
 | X-10 | 20° road tilt, δ = 0, neutral-steer vehicle | Straight path at an angle; β ≡ 0; `N_β` reported as 0 |
 | X-11 | Same with (a,b) = (4,6) ft then (6,4) ft | Understeer path, then oversteer path (turns up-slope) |
-| X-12 | Understeer car, low speed, constant acceleration | Spirals outward; rear slip angle saturates at the breakaway value |
+| X-12 ‡ | Understeer car, low speed, constant acceleration | Spirals outward; **front** slip angle saturates at the breakaway value, after which the rear is pinned at `(a/b)·α_bk` and never reaches it (see below) |
 | X-13 | Oversteer car, a = 5.1, b = 4.9 ft | Spirals inward until both axles saturate; SHALL raise `EV-SPIN` and SHALL warn that the open-loop model is not valid past that point |
+
+‡ **Erratum E-7 — the rear cannot saturate in X-12.** As printed, X-12 expects the
+*rear* slip angle to reach the breakaway value on an understeering car. It cannot, and the
+reason is exact rather than numerical.
+
+At steady state with a fixed steer the yaw moment vanishes, so `a·F_yF = b·F_yR`. Once the
+front is saturated, `F_yF = |C_F|·α_bk,F` is capped, and therefore
+
+```
+α_R = (a/b) · (|C_F|/|C_R|) · α_bk,F                                        (17.3a)
+```
+
+is **pinned** — independent of speed, and independent of how far past saturation the front
+goes. With equal axle stiffnesses this is `(a/b)·α_bk,F`, and understeer with equal
+stiffnesses means `K·ℓ·g ∝ b − a > 0`, i.e. `a/b < 1`. So `α_R < α_bk,R` always: the rear
+never saturates, however hard the car is driven.
+
+Measured on the `(a, b) = (4, 6)` ft fixture with `α_bk` = 5° at both axles: `α_R` locks at
+**3.333°** — exactly `(4/6)·5°` — from the moment the front saturates, and is still
+3.333° at 400 ft/s while `α_F` has reached 15.1°.
+
+X-13 is unaffected and correct as printed: it specifies `a = 5.1`, `b = 4.9`, so `a/b > 1`
+and (17.3a) puts `α_R` **above** `α_bk` — which is exactly why both axles saturate there
+and the car spins. The two vectors are consistent with each other once (17.3a) is applied;
+only X-12's expected behaviour is mis-stated.
+
+The acceptance suite SHALL assert the front saturating, the outward spiral, and the pinning
+of `α_R` at (17.3a) — the pinning being the sharper check, since it is an equality rather
+than an inequality.
 
 ### 17.4 P6 — Ride and Roll Rate acceptance vectors
 
@@ -2809,6 +2838,7 @@ switch. Nothing here is a silent "improvement".
 | **E-4** | Ackermann gradient constant ([R280] p. 109) | `858·ℓ[ft]/V[mph]²` | `ℓ/V²` in SI (rad per m/s²), `ℓ·g/V²` per g | The exact English-unit constant is `57.2958 × 32.17405 / 1.466667² = 856.970`; 858 is 0.120 % high. The SI form has no magic number. |
 | **E-5** | Yaw-rate transfer function matrix ([R280] p. 76) | RHS entry printed as 33463.2 | `−a·C_F` per radian ≈ 40 091 lbf·ft/rad (40 153 with the source's rounded `a` = 2.92 ft) | The printed value is inconsistent with the transfer function printed on the same page, which the correct value reproduces (numerator `0.841 s + 7.550` vs published `0.84 s + 7.57`) and which satisfies the DC-gain identity I-2 exactly. |
 | **E-6** | MMM limit character, cases b and c ([R280] p. 104) | b (`a`=6, `b`=4) labelled "terminal plow", c (`a`=4, `b`=6) "terminal spin" | Interchanged: b is **spin**, c is **plow** | `a` is CG-to-front-axle, so b is the rear-heavy car. Both the understeer-gradient sign from I-1 (`K ∝ b − a`) and the trim-line saturation order (`α_F/α_R = b/a`) give the opposite of the printed labels, while reproducing cases a, d and e as printed — which confines the defect to those two rows. Detected by the §17.6 classification test and by its cross-check against the sign of `K`. |
+| **E-7** | X-12 expected behaviour ([R280] A.2 exercises) | "rear slip angle saturates at the breakaway value" on an understeering car | The **front** saturates; the rear is then pinned at (17.3a) `α_R = (a/b)(\|C_F\|/\|C_R\|)·α_bk,F` and never reaches breakaway | Exact, not numerical: at steady state `a·F_yF = b·F_yR`, so a saturated front caps `F_yR` and pins `α_R` independently of speed. Understeer with equal stiffnesses means `a/b < 1`, hence `α_R < α_bk`. Measured: `α_R` locks at 3.333° = (4/6)·5° and stays there from 60 to 400 ft/s. X-13 (`a` = 5.1, `b` = 4.9) is unaffected — there `a/b > 1`, which is precisely why both axles saturate. |
 | **D-1** | Tire vertical load sign | Negative in the SAE tire frame | Non-negative magnitude in the tire-model interface | Eliminates a systematic class of sign errors; conversion isolated in the wheel adapter (§3.2). |
 | **D-2** | Tabular tire interpolation | Linear (produces the visible slope "kinks" noted at [R280] p. 255) | Monotone cubic Hermite | Linear interpolation makes the numerical Jacobians used by the steady-state, MMM and implicit load-transfer solvers discontinuous. Flag: `--legacy-linear-interp`. |
 | **D-3** | Transfer/fraction naming | `ΔF_z` means the full inside-to-outside difference in [R280] Ch. 7 and the transferred amount in Ch. 18 | Single definition (9.8)–(9.9) | Factor-of-two hazard. |
