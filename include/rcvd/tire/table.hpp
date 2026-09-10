@@ -147,9 +147,27 @@ public:
     }
 
     // §6.4: silent extrapolation of tire data is a correctness hazard, not a
-    // convenience. The caller checks this and raises E-TIRE-020.
+    // convenience.
     [[nodiscard]] bool beyond_Fz_range(double Fz_N) const {
         return Fz_N > cfg_.Fz_N.back() * (1.0 + cfg_.Fz_extrapolation_fraction);
+    }
+
+    // The checked entry point. evaluate() cannot return a Result -- the TireModel
+    // contract is a pure function called once per wheel per integrator stage, and
+    // §14.1 Rule D3 says solvers assert rather than re-validate -- so the model
+    // offers this for the loading and setup paths, where E-TIRE-020 belongs.
+    [[nodiscard]] core::Result<TireOutput> checked_evaluate(const TireState& s) const {
+        if (beyond_Fz_range(s.Fz_N)) {
+            return core::err<TireOutput>(
+                "E-TIRE-020",
+                "tire '" + cfg_.id + "': load " + std::to_string(s.Fz_N) +
+                    " N is more than " +
+                    std::to_string(100.0 * cfg_.Fz_extrapolation_fraction) +
+                    " % beyond the last tabulated node (" +
+                    std::to_string(cfg_.Fz_N.back()) + " N); extrapolating tire data "
+                    "further is a correctness hazard, not a convenience");
+        }
+        return evaluate(s);
     }
 
 private:

@@ -123,8 +123,28 @@ public:
                 "E-TIRE-003", "tire '" + cfg.id + "' has a non-positive breakaway slip angle");
         }
 
-        return LinearTire(std::move(cfg));
+        LinearTire t(std::move(cfg));
+        // §6.7: emit W-TIRE-101 if any load in the run exceeds
+        // Fz* = -c0/(2 c1), beyond which |C_alpha| FALLS with load. Not fatal --
+        // E-TIRE-004 already rejected the sign change -- but the user needs to know
+        // the tire is on the far side of its stiffness peak.
+        if (const auto peak = t.stiffness_peak_load_N()) {
+            if (t.cfg_.Fz_max_operating_N > *peak) {
+                t.warnings_.push_back(core::make_diagnostic(
+                    "W-TIRE-101",
+                    "tire '" + t.cfg_.id + "': the operating load ceiling " +
+                        std::to_string(t.cfg_.Fz_max_operating_N) +
+                        " N is beyond Fz* = " + std::to_string(*peak) +
+                        " N, where the quadratic C_alpha(Fz) peaks; above it the "
+                        "cornering-stiffness MAGNITUDE falls with load"));
+            }
+        }
+        return t;
     }
+
+    // §14.1: a W- diagnostic travels with a SUCCESSFUL Result and callers SHALL
+    // surface it.
+    [[nodiscard]] std::span<const core::Diagnostic> warnings() const { return warnings_; }
 
     // §6.7: W-TIRE-101 if any load in the run exceeds Fz* = -c0/(2 c1), beyond
     // which |C_alpha| falls with load. Not fatal — reported by the caller.
@@ -233,8 +253,9 @@ private:
     // the physical claim that the force acts at the contact centre.
     [[nodiscard]] double trail_at(double /*Fz_N*/) const { return cfg_.pneumatic_trail_m; }
 
-    LinearTireConfig    cfg_;
-    std::vector<double> breaks_;
+    LinearTireConfig            cfg_;
+    std::vector<double>         breaks_;
+    std::vector<core::Diagnostic> warnings_;
 };
 
 }  // namespace rcvd::tire

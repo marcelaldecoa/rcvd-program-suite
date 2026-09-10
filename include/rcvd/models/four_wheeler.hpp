@@ -73,6 +73,20 @@ struct SlipAngles {
                 t_s, static_cast<core::Wheel>(i)));
         } else if (cfg.switches.small_angle_slip) {
             a = lateral / longitudinal;
+            // §3.3 as corrected: small_angle_limit is a DIAGNOSTIC threshold, never
+            // a branch condition. The force path does not change here — that would
+            // break Rule A2 by switching mid-manoeuvre — but the excursion is
+            // reported so the user knows the approximation is being stretched.
+            if (std::abs(a) > cfg.small_angle_limit_rad) {
+                out.events.push_back(core::make_diagnostic(
+                    "W-NUM-220",
+                    "small_angle_slip is forced on and |v/u| reached " + std::to_string(std::abs(a)) +
+                        " rad, beyond small_angle_limit = " +
+                        std::to_string(cfg.small_angle_limit_rad) +
+                        " rad; the force path is unchanged, but arctan and v/u differ by " +
+                        std::to_string(std::abs(a - std::atan(a))) + " rad here",
+                    t_s, static_cast<core::Wheel>(i)));
+            }
         } else {
             a = std::atan2(lateral, longitudinal);
         }

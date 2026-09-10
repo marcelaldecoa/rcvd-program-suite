@@ -87,6 +87,18 @@ required to catch it:
 
 Which is what the spec predicts: "Identity I-2 detects it at every speed."
 
+## The §14.2 register documents behaviour, not intent
+
+Appendix D requires that "every warning and error code in §14.2 has a test that
+provokes it". `tests/test_diagnostic_coverage.cpp` is that gate, and it is
+mechanical: it walks `core::codes::kRegister` and fails — naming each one — if
+any entry was not actually raised by library code. It also checks the converse,
+so a typo'd code cannot masquerade as coverage.
+
+When first written it found **five codes that no code path could emit**:
+`E-TIRE-020`, `EV-CLAMP-MU`, `EV-CLAMP-ELLIPSE`, `W-NUM-220` and `W-TIRE-101`.
+All five now have emission points.
+
 ## Layout
 
 ```

@@ -22,7 +22,8 @@ add_executable(rcvd_tests
   test_io.cpp
   test_quantity.cpp
   test_display.cpp
-  test_capi.cpp)
+  test_capi.cpp
+  test_diagnostic_coverage.cpp)
 
 target_include_directories(rcvd_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

@@ -32,6 +32,21 @@ struct FrictionModel {
     [[nodiscard]] double dmu_dFz(double Fz_N) const {
         return clamped_at(Fz_N) ? 0.0 : -mu1_per_N;
     }
+
+    // Rule D1's other half for this model. A tire held at mu_min is not obeying
+    // (6.9) any more, and the run needs to say so rather than quietly flatten the
+    // load sensitivity that makes roll-stiffness distribution a tuning parameter.
+    [[nodiscard]] std::optional<core::Diagnostic> clamp_event(double Fz_N,
+                                                              double t_s = 0.0) const {
+        if (!clamped_at(Fz_N)) return std::nullopt;
+        const double raw = mu0 - mu1_per_N * Fz_N;
+        return core::make_diagnostic(
+            "EV-CLAMP-MU",
+            "friction coefficient clamped: (6.9) gives mu = " + std::to_string(raw) +
+                " at Fz = " + std::to_string(Fz_N) + " N, outside [" +
+                std::to_string(mu_min) + ", " + std::to_string(mu0) + "]",
+            t_s);
+    }
 };
 
 // §6.8 (6.11)-(6.12). Rev 1.0 models combined slip only as a CAPACITY LIMIT, not
@@ -55,6 +70,23 @@ struct FrictionEllipse {
         const double radicand = 1.0 - ratio * ratio;
         if (clamped) *clamped = radicand < 0.0;   // EV-CLAMP-ELLIPSE
         return mu_x * Fz_N * std::sqrt(std::max(0.0, radicand));
+    }
+
+    // Rule D1: every clamp raises an event the first time it fires. EV-CLAMP-ELLIPSE
+    // exists because the max(0, .) guard above is a real physical clamp, not a
+    // rounding convenience: without the event, a tire silently past its friction
+    // limit looks identical to one exactly at it.
+    [[nodiscard]] std::optional<core::Diagnostic> clamp_event(double Fy_N, double Fz_N,
+                                                              double t_s = 0.0) const {
+        bool clamped = false;
+        (void)longitudinal_capacity(Fy_N, Fz_N, &clamped);
+        if (!clamped) return std::nullopt;
+        return core::make_diagnostic(
+            "EV-CLAMP-ELLIPSE",
+            "friction-ellipse radicand clamped to zero: |Fy| = " + std::to_string(Fy_N) +
+                " N already exceeds mu_y*Fz = " + std::to_string(mu_y * Fz_N) +
+                " N, so no longitudinal capacity remains",
+            t_s);
     }
 
     // (6.11) as a predicate: is this force pair inside the ellipse?
