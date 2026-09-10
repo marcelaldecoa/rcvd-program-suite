@@ -2598,10 +2598,35 @@ I-3 moment-balance violation, per the note above.
 | Case | a, b [ft] | C_F, C_R [lbf/deg] | Front line A_Y [g] / C_N | Rear line A_Y [g] / C_N | Character |
 |---|---|---|---|---|---|
 | a | 5, 5 | −420, −420 | ±1.30 / ±0.65 | ±1.30 / ∓0.65 | terminal drift |
-| b | 6, 4 | −420, −420 | ±1.30 / ±0.78 | ±1.30 / ∓0.52 | terminal plow |
-| c | 4, 6 | −420, −420 | ±1.30 / ±0.52 | ±1.30 / ∓0.78 | terminal spin |
+| b | 6, 4 | −420, −420 | ±1.30 / ±0.78 | ±1.30 / ∓0.52 | terminal **spin** (see below) |
+| c | 4, 6 | −420, −420 | ±1.30 / ±0.52 | ±1.30 / ∓0.78 | terminal **plow** (see below) |
 | d | 5, 5 | −504, −336 | ±1.56 / ±0.78 | ±1.04 / ∓0.52 | terminal spin |
 | e | 5, 5 | −336, −504 | ±1.04 / ±0.52 | ±1.56 / ∓0.78 | terminal plow |
+
+**Erratum E-6 — cases b and c have their character interchanged.** `a` is the CG-to-front-axle
+distance (§3.4), so case b (`a` = 6, `b` = 4) puts the CG 6 ft behind the front axle — a
+**rear-heavy** car — and case c is front-heavy. Two independent routes both give the opposite
+of the printed characters, and both confirm cases a, d and e as printed:
+
+- **Understeer gradient.** From I-1, `K·ℓ·g = W_F/|C_F| − W_R/|C_R|`, and with
+  `W_F = m g b/ℓ`, `W_R = m g a/ℓ` and `|C_F| = |C_R|` this is proportional to `b − a`.
+  Case b has `b − a = −2` ⇒ `K < 0` ⇒ oversteer ⇒ **spin**. Case c has `b − a = +2` ⇒
+  understeer ⇒ **plow**.
+- **Saturation order.** On the trim line `a·F_yF = b·F_yR`, so with equal stiffnesses
+  `α_F/α_R = b/a`. Case b gives `α_F = 0.667·α_R`: the **rear** reaches `α_bk` first, which
+  is terminal spin. Case c gives `α_F = 1.5·α_R`: the front saturates first, terminal plow.
+
+The same two arguments applied to cases d and e reproduce the printed "spin" and "plow"
+exactly — d has the stiffer front (`α_F = 0.667·α_R`, rear saturates first) and e the
+stiffer rear — which is what identifies the defect as confined to the b/c rows rather than
+to the convention.
+
+Equivalently, and as the implementation computes it: at the diagram's extreme `Ā_Y` both
+axles are saturated, so `C_N = (a·F_yF − b·F_yR)/(m g ℓ)` has the sign of `a − b` for equal
+stiffnesses. Case b gives `C_N = +0.261` (above the trim line ⇒ spin), case c `−0.261`
+(below ⇒ plow). The acceptance suite SHALL assert the characters as corrected here, and
+SHALL additionally require the diagram's classification to agree with the sign of `K` from
+(8.14) for every case — the two routes are independent and their agreement is the check.
 
 All twenty construction-line coordinates reproduce to **4.2e−3** relative with the mandated
 `g = 9.80665 m/s²` (worst case: case a, `Ā_Y = 1.3054` vs a published 1.30). With the
@@ -2611,7 +2636,18 @@ figures, not by the gravity constant, and the acceptance tolerance for this bloc
 **5e−3** with that reason recorded. Source: [R280] p. 104.
 
 Metric-extraction vectors from a real diagram ([R280] pp. 105–111, [RCVD] Fig. 8.7,
-60 mph, ℓ = 8.5 ft, `G_s` = 20:1):
+60 mph, ℓ = 8.5 ft, `G_s` = 20:1).
+
+**Reproducibility of this block (normative).** The diagram these are read from is generated
+by a tire dataset that this specification does not reproduce, for the same reason §10.7
+gives for its own precedent case. Consequently **M-01, M-02, M-03, M-05 and M-06 are cited
+as provenance, not as reproducible acceptance vectors**, and the suite SHALL NOT assert
+them against a fixture that cannot generate that diagram. Only **M-04 is reproducible**: it
+is pure arithmetic on (10.10) given `SS`, `G_s`, `ℓ` and `V`, all of which are stated, and
+it is what erratum E-3 turns on. The metric *implementations* (SI, CM, SS, SSl, UG, limit
+classification, max trimmed `Ā_Y`) SHALL instead be verified against the §17.6 five-case
+L2 fixture above, where every input is specified — and, for SI, against its analytic
+linear-range value (10.7).
 
 | ID | Metric | At A_Y = 0.3 g | At A_Y = 0.7 g |
 |----|--------|----------------|----------------|
@@ -2748,6 +2784,7 @@ switch. Nothing here is a silent "improvement".
 | **E-3** | MMM steering sensitivity ([R280] pp. 108–109) | 1.30 and 0.33 g/100° SW quoted, but 1.18 and 0.37 used in the understeer-gradient calculation on the following page | Acceptance vectors use 1.18 / 0.37 | Only 1.18 / 0.37 are consistent with the published understeer gradients (2.211, 11.49 deg/g) and with the independent constant-speed response-test cross-check (2.2, 11.4 deg/g). The 1.30 / 0.33 pair reproduces neither. |
 | **E-4** | Ackermann gradient constant ([R280] p. 109) | `858·ℓ[ft]/V[mph]²` | `ℓ/V²` in SI (rad per m/s²), `ℓ·g/V²` per g | The exact English-unit constant is `57.2958 × 32.17405 / 1.466667² = 856.970`; 858 is 0.120 % high. The SI form has no magic number. |
 | **E-5** | Yaw-rate transfer function matrix ([R280] p. 76) | RHS entry printed as 33463.2 | `−a·C_F` per radian ≈ 40 091 lbf·ft/rad (40 153 with the source's rounded `a` = 2.92 ft) | The printed value is inconsistent with the transfer function printed on the same page, which the correct value reproduces (numerator `0.841 s + 7.550` vs published `0.84 s + 7.57`) and which satisfies the DC-gain identity I-2 exactly. |
+| **E-6** | MMM limit character, cases b and c ([R280] p. 104) | b (`a`=6, `b`=4) labelled "terminal plow", c (`a`=4, `b`=6) "terminal spin" | Interchanged: b is **spin**, c is **plow** | `a` is CG-to-front-axle, so b is the rear-heavy car. Both the understeer-gradient sign from I-1 (`K ∝ b − a`) and the trim-line saturation order (`α_F/α_R = b/a`) give the opposite of the printed labels, while reproducing cases a, d and e as printed — which confines the defect to those two rows. Detected by the §17.6 classification test and by its cross-check against the sign of `K`. |
 | **D-1** | Tire vertical load sign | Negative in the SAE tire frame | Non-negative magnitude in the tire-model interface | Eliminates a systematic class of sign errors; conversion isolated in the wheel adapter (§3.2). |
 | **D-2** | Tabular tire interpolation | Linear (produces the visible slope "kinks" noted at [R280] p. 255) | Monotone cubic Hermite | Linear interpolation makes the numerical Jacobians used by the steady-state, MMM and implicit load-transfer solvers discontinuous. Flag: `--legacy-linear-interp`. |
 | **D-3** | Transfer/fraction naming | `ΔF_z` means the full inside-to-outside difference in [R280] Ch. 7 and the transferred amount in Ch. 18 | Single definition (9.8)–(9.9) | Factor-of-two hazard. |
