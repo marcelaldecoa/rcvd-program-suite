@@ -17,6 +17,7 @@
 #include "rcvd/tire/linear.hpp"
 
 #include "support/defective_tire.hpp"
+#include "support/fixtures.hpp"
 #include "rcvd/units/convert.hpp"
 
 static int g_fail = 0, g_pass = 0;
@@ -406,6 +407,109 @@ int main() {
         const auto rep = check_contract(clean);
         check(rep.ok(), "the un-injected control model passes");
         for (const auto& f : rep.failures) std::printf("    %s: %s\n", f.check.c_str(), f.detail.c_str());
+    }
+
+    std::printf("== P1 bicycle model, B-01 ... B-31 (spec 8, 17.2) ==\n");
+    {
+        using namespace rcvd::models;
+        const auto rv = core::resolve(fixtures::ch5_input());
+        check(rv.ok(), "CH5 resolves");
+        const core::Vehicle v = rv.value();
+        const auto C = fixtures::ch5_tires();
+        const double V44 = 44.0 * units::FOOT;
+
+        close_to(v.m / units::SLUG, 115.0, 1e-5, "B-01 mass [slug]");
+        // B-02: the a/b inversion. 57 % FRONT weight puts the CG closer to the
+        // front axle, so a = 0.43*l. Getting this backwards is defect number one.
+        close_to(v.a / units::FOOT, 3.7446, 1e-4, "B-02 a [ft]");
+        close_to(v.b / units::FOOT, 4.9637, 1e-4, "B-02 b [ft]");
+        check(v.a < v.b, "B-02 a < b for a front-heavy car");
+        close_to(v.W_F() / units::POUND_FORCE, 2109.0, 1e-9, "static front load [lbf]");
+
+        const auto d = stability_derivatives(v, C, V44);
+        close_to(d.Y_beta / fixtures::kLbfDeg, -1220.0, 1e-12, "B-03 Y_beta [lbf/deg]");
+        close_to(d.Y_r / fixtures::kLbfDeg, 10.965, 1e-4, "B-04 Y_r [lbf*s/deg]");
+        close_to(d.Y_delta / fixtures::kLbfDeg, 640.0, 1e-12, "B-05 Y_delta [lbf/deg]");
+        const double kLbfFtDeg = units::LBF_FT_PER_DEG_TO_NM_PER_RAD;
+        close_to(d.N_beta / kLbfFtDeg, 482.44, 1e-4, "B-06 N_beta [lbf*ft/deg]");
+        close_to(d.N_r / kLbfFtDeg, -528.74, 1e-4, "B-07 N_r [lbf*ft*s/deg]");
+        close_to(d.N_delta / kLbfFtDeg, 2396.53, 1e-4, "B-08 N_delta [lbf*ft/deg]");
+        check(d.understeering(), "CH5 understeers (N_beta > 0)");
+
+        const auto m = handling_metrics(v, C);
+        close_to(m.K * units::FOOT * units::FOOT, 3.4399e-5, 1e-4, "B-09 K [s^2/ft^2]");
+        check(m.V_ch.has_value(), "B-10 V_ch defined for an understeering car");
+        close_to(*m.V_ch / units::FOOT, 170.50, 1e-4, "B-10 V_ch [ft/s]");
+        close_to(m.NSP, 0.47541, 1e-4, "B-11 NSP");
+        close_to(m.SM, 0.04541, 1e-4, "B-11 SM");
+        close_to(m.NSP * v.l / units::FOOT, 4.1400, 1e-4, "B-12 neutral-steer a [ft]");
+        close_to(v.l / (50.0 * units::FOOT) / units::DEGREE, 9.9790, 1e-4, "B-15 delta_Ack [deg]");
+
+        // I-1: the derivative form (8.14) against the classical axle form (8.24).
+        close_to(m.K * v.l * v.g, understeer_gradient_axle_form(v, C), 1e-12, "B-26 identity I-1");
+        close_to(m.K * v.l * v.g / units::DEGREE, 0.5522, 1e-4, "B-26 K_us [deg/g]");
+
+        // I-2: three independent routes to the same yaw-rate gain.
+        const double gK  = yaw_rate_gain(v, m.K, V44);
+        const double gD  = yaw_rate_gain_derivative_form(v, C, V44);
+        const double gTF = yaw_rate_transfer_function(v, C, V44).dc_gain();
+        close_to(gK, gD, 1e-14, "B-27 identity I-2, (8.15) vs (8.25)");
+        close_to(gK, gTF, 1e-14, "B-25 identity I-2, (8.15) vs (8.28) DC gain");
+        close_to(gK, 4.73716, 1e-5, "B-27 yaw-rate gain [1/s]");
+
+        // B-17: crowned road, speed-independent by construction.
+        const auto tilt = tilted_road_trim(v, C, 5.0 * units::DEGREE);
+        close_to(tilt.beta_rad / units::DEGREE, 0.2392, 1e-3, "B-17 beta [deg]");
+        close_to(tilt.delta_rad / units::DEGREE, -0.0480, 3e-3, "B-17 delta [deg]");
+
+        // B-18: pure statics. The corrected values, and the two identities.
+        const double F = 100.0 * units::POUND_FORCE, dd = 1.5 * units::FOOT;
+        const auto cw = crosswind_trim(v, F, dd);
+        close_to(cw.Fy_F_N / units::POUND_FORCE, -74.2249, 1e-5, "B-18 Fy_F [lbf]");
+        close_to(cw.Fy_R_N / units::POUND_FORCE, -25.7751, 1e-5, "B-18 Fy_R [lbf]");
+        close_to(cw.Fy_F_N + cw.Fy_R_N, -F, 1e-12, "B-18 forces sum to -F");
+        close_to(v.a * cw.Fy_F_N - v.b * cw.Fy_R_N, -F * dd, 1e-12, "B-18 moment arm is 1.5 ft");
+
+        // B-19 / B-31 on the oversteering variant.
+        const auto ros = core::resolve(fixtures::ch5_os_input());
+        check(ros.ok(), "CH5-OS resolves");
+        const auto dos = stability_derivatives(ros.value(), C, V44);
+        close_to(dos.N_beta / kLbfFtDeg, -1004.94, 1e-5, "B-19 reversed N_beta [lbf*ft/deg]");
+        check(!dos.understeering(), "B-19 CH5-OS oversteers");
+
+        const auto mos = handling_metrics(ros.value(), C);
+        check(mos.V_crit.has_value(), "B-31 V_crit defined for an oversteering car");
+        for (double V_fts : {100.0, 170.0}) {
+            const double V = V_fts * units::FOOT;
+            const auto e = eigenstructure(ros.value(), C, V);
+            check(std::signbit(e.det) == std::signbit(1.0 + mos.K * V * V),
+                  "B-31 det A and 1 + K V^2 agree in sign at " + std::to_string(V_fts) + " ft/s");
+        }
+        check(*mos.V_crit / units::FOOT > 100.0 && *mos.V_crit / units::FOOT < 170.0,
+              "B-31 the pair brackets V_crit");
+        check(!steady_state(ros.value(), C, *mos.V_crit, 0.02).ok(),
+              "E-SS-030 at the critical speed");
+
+        // B-20 ... B-25 on the First Example.
+        const auto rfe = core::resolve(fixtures::first_example_input());
+        check(rfe.ok(), "First Example resolves");
+        const auto Cfe = fixtures::first_example_tires();
+        const double V40 = 40.0 * units::MPH;
+        const auto e = eigenstructure(rfe.value(), Cfe, V40);
+        close_to(-e.trace, 16.190, 1e-4, "B-20 char. eq. s-coefficient");
+        close_to(e.det, 87.813, 1e-4, "B-20 char. eq. constant");
+        close_to(e.re1, -8.0951, 1e-4, "B-21 pole real part");
+        close_to(std::abs(e.im1), 4.7204, 1e-3, "B-21 pole imaginary part");
+        close_to(e.omega_n, 9.3709, 1e-4, "B-22 omega_n [rad/s]");
+        close_to(e.zeta, 0.86386, 1e-4, "B-23 zeta");
+        check(e.stable() && e.oscillatory(), "First Example is stable and underdamped");
+        close_to(e.re1 + e.re2, e.trace, 1e-12, "8.6 eigen sum == trace");
+        close_to(e.re1 * e.re2 - e.im1 * e.im2, e.det, 1e-12, "8.6 eigen product == det");
+
+        const auto tf = yaw_rate_transfer_function(rfe.value(), Cfe, V40);
+        close_to(tf.n1 * units::DEGREE, 0.8410, 1e-3, "B-24 numerator n1 [per deg]");
+        close_to(tf.n0 * units::DEGREE, 7.5504, 1e-3, "B-24 numerator n0 [per deg]");
+        close_to(tf.dc_gain(), 4.92645, 1e-5, "B-25 DC gain [1/s]");
     }
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -10,12 +10,13 @@ add_executable(rcvd_tests
   test_units.cpp
   test_core.cpp
   test_numerics.cpp
-  test_tire.cpp)
+  test_tire.cpp
+  test_bicycle.cpp)
 
 target_include_directories(rcvd_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(rcvd_tests PRIVATE
-  rcvd::units rcvd::core rcvd::numerics rcvd::tire
+  rcvd::units rcvd::core rcvd::numerics rcvd::tire rcvd::models
   rcvd_flags
   Catch2::Catch2WithMain)
 

@@ -15,13 +15,14 @@ Following the build order of spec Appendix C:
 | # | Component | State |
 |---|-----------|-------|
 | 1 | `units` — exact constants, closed vocabulary, round-trip | **done** |
-| 2 | `core` — `Result<T>`/`Diagnostic`, §14.2 register | **partial** — error channel done; value types, JSON schema and validation outstanding |
+| 2 | `core` — `Result<T>`/`Diagnostic`, §14.2 register, `Vehicle` | **partial** — error channel, `Vehicle` and (5.1a–c) validation done; JSON schema outstanding |
 | 3 | `numerics` — PCHIP, Brent, LU + `rcond`, RK4, DOPRI5(4) dense output | **done** |
 | 4 | `tire` — L1, L2, conformance T1–T8, then L3/L4/L5 | **partial** — L1, L2 and the shared T1–T8 suite done; L3/L4/L5 outstanding |
-| 5 | `models::BicycleModel` + `analysis` → B-01 … B-31 | not started |
+| 5 | `models::BicycleModel` + `analysis` → B-01 … B-31 | **done** — gate passed |
 | 6–11 | four-wheeler, MMM, ride/roll, lap solver, io/capi/cli, GUI | not started |
 
-Step 5 is a hard gate: do not proceed past it until all of B-01 … B-31 pass.
+Step 5 was a hard gate; B-01 … B-31 pass, so step 6 is unblocked. The transient
+vectors (X-01 … X-13, §17.3) need a time-integration driver and are not yet built.
 
 ## Building
 
@@ -44,7 +45,7 @@ mirrors the same assertions with no dependencies, and **is** verified:
 cl /nologo /std:c++20 /EHsc /W4 /WX /permissive- /fp:precise /I include /Fe:verify.exe tools/verify_standalone.cpp
 ```
 
-94 assertions, all passing. To get the authoritative suite running,
+146 assertions, all passing. To get the authoritative suite running,
 `winget install Kitware.CMake` and use the CMake path above.
 
 ## The conformance suite is itself tested
@@ -67,6 +68,19 @@ Two of the checks needed care:
 - **T6** excludes interpolation knots as well as declared slope breaks, for the
   reason recorded in the spec at §6.1.
 
+The same discipline is applied to the B-vectors. All 18 cases passed on their
+first run, which is not by itself evidence they are load-bearing, so each defect
+§8 explicitly warns about was injected into a scratch copy and the suite was
+required to catch it:
+
+| Injected defect | Caught by |
+|---|---|
+| `a`/`b` inversion (§5.1) | 14 assertions, including the static axle loads |
+| Second-column trap, `Y_r/(m u)` (§8.4) | 5, including I-2 and B-31 |
+| `B` with a leading minus (§8.4) | 8, including I-2 and the B-24 numerator |
+
+Which is what the spec predicts: "Identity I-2 detects it at every speed."
+
 ## Layout
 
 ```
@@ -75,6 +89,7 @@ include/rcvd/
              convert.hpp     closed unit vocabulary, the two-point boundary (U1/U2)
   core/      diagnostic.hpp  the §14.2 E-/W-/EV-/H- register
              result.hpp      Result<T>, the §4.6 error channel (Rule A3)
+             vehicle.hpp     resolved SI Vehicle + (5.1a)-(5.1c) validation
   numerics/  pchip.hpp       Fritsch-Carlson monotone cubic Hermite (§13.5)
              roots.hpp       Brent (§13.7) + the (13.2) differentiation step
              linalg.hpp      LU with partial pivoting and rcond (§13.8)
@@ -82,8 +97,11 @@ include/rcvd/
   tire/      tire_model.hpp  the §6.1 contract; TireState/TireOutput (§4.3)
              linear.hpp      L1 (6.1) and L2 (6.3), with (6.10) load sensitivity
              conformance.hpp the shared T1-T8 check, applied to every model
+  models/    bicycle.hpp     P1: derivatives, state space, steady state,
+                             eigenstructure, transfer function (§8)
 tests/       Catch2 v3 suite, authoritative
   support/   defective_tire.hpp — fault injection for the conformance suite
+             fixtures.hpp       — CH5, CH5-OS and "First Example" (§17.2)
 tools/       verify_standalone.cpp — dependency-free mirror
 ```
 
