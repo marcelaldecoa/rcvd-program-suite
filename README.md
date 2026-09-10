@@ -27,9 +27,8 @@ Following the build order of spec Appendix C:
 | 11 | `app` (GUI) + §18.3 interface-equivalence gate | not started — the C++/C half of §18.3 is closed; the GUI half needs Qt |
 
 Both hard gates are passed: B-01 … B-31 (step 5) and I-3/I-3b/I-3c + C-02
-(step 6). Cross-checks C-01, C-02, C-03 and C-04 all hold; C-05 waits on a
-slow-ramp P2 run. The transient vectors (X-01 … X-13, §17.3) need a run driver
-with event location and are not yet built.
+(step 6). **All five cross-checks C-01 … C-05 hold**, and the behavioural
+vectors X-01 … X-13 pass. Only step 11 remains, and it needs Qt.
 
 ## Building
 
@@ -101,6 +100,7 @@ include/rcvd/
              roots.hpp       Brent (§13.7) + the (13.2) differentiation step
              linalg.hpp      LU with partial pivoting and rcond (§13.8)
              integrate.hpp   RK4 fixed, DOPRI5(4) with dense output (§13.2)
+             step_guidance.hpp  §13.3 step adequacy, W-NUM-200/210
              accumulate.hpp  Neumaier compensated summation (§13.1, A2)
   tire/      tire_model.hpp  the §6.1 contract; TireState/TireOutput (§4.3)
              linear.hpp      L1 (6.1) and L2 (6.3), with (6.10) load sensitivity

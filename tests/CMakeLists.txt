@@ -18,6 +18,7 @@ add_executable(rcvd_tests
   test_ride_roll.cpp
   test_moment_method.cpp
   test_lap_solver.cpp
+  test_transient.cpp
   test_io.cpp
   test_quantity.cpp
   test_display.cpp
