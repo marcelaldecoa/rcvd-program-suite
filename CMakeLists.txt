@@ -66,16 +66,28 @@ target_include_directories(rcvd_tire INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(rcvd_tire INTERFACE rcvd_numerics)  # conformance uses (13.2)
 
+add_library(rcvd_aero INTERFACE)
+target_include_directories(rcvd_aero INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_link_libraries(rcvd_aero INTERFACE rcvd_units)
+
+add_library(rcvd_analysis INTERFACE)
+target_include_directories(rcvd_analysis INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_link_libraries(rcvd_analysis INTERFACE rcvd_core rcvd_numerics)
+
 add_library(rcvd_models INTERFACE)
 target_include_directories(rcvd_models INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_link_libraries(rcvd_models INTERFACE rcvd_core rcvd_numerics rcvd_tire)
+target_link_libraries(rcvd_models INTERFACE rcvd_core rcvd_numerics rcvd_tire rcvd_aero)
 
 add_library(rcvd::units    ALIAS rcvd_units)
 add_library(rcvd::core     ALIAS rcvd_core)
 add_library(rcvd::numerics ALIAS rcvd_numerics)
 add_library(rcvd::tire     ALIAS rcvd_tire)
 add_library(rcvd::models   ALIAS rcvd_models)
+add_library(rcvd::aero     ALIAS rcvd_aero)
+add_library(rcvd::analysis ALIAS rcvd_analysis)
 
 if(RCVD_BUILD_TESTS)
   enable_testing()

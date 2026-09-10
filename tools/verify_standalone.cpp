@@ -13,6 +13,9 @@
 #include "rcvd/numerics/linalg.hpp"
 #include "rcvd/numerics/pchip.hpp"
 #include "rcvd/numerics/roots.hpp"
+#include "rcvd/aero/aero_model.hpp"
+#include "rcvd/analysis/pair_analysis.hpp"
+#include "rcvd/models/load_transfer.hpp"
 #include "rcvd/tire/conformance.hpp"
 #include "rcvd/tire/linear.hpp"
 
@@ -510,6 +513,166 @@ int main() {
         close_to(tf.n1 * units::DEGREE, 0.8410, 1e-3, "B-24 numerator n1 [per deg]");
         close_to(tf.n0 * units::DEGREE, 7.5504, 1e-3, "B-24 numerator n0 [per deg]");
         close_to(tf.dc_gain(), 4.92645, 1e-5, "B-25 DC gain [1/s]");
+    }
+
+    std::printf("== aero + load transfer, F-01 ... F-12 (spec 7, 9.3-9.5, 17.5) ==\n");
+    {
+        using namespace rcvd::models;
+        const double LBF = units::POUND_FORCE, IN = units::INCH, FT = units::FOOT;
+        const double G = units::G_STANDARD;
+
+        // --- 7 aerodynamics -------------------------------------------------
+        aero::AeroConfig ac;
+        ac.frontal_area_m2 = 2.0; ac.CD = 0.5; ac.CLF = -2.0; ac.CLR = -1.5;
+        const auto af = aero::evaluate(ac, 50.0);
+        check(af.lift_front_N < 0.0 && af.downforce_front_N > 0.0,
+              "7 sign test: C_LF = -2.0 increases the D-1 front load");
+        close_to(af.q_Pa, 0.5 * aero::kRhoStd * 2500.0, 1e-15, "7.1 dynamic pressure");
+        check(aero::evaluate(ac, 0.5).q_Pa == 0.0, "below the speed floor aero is zero");
+        ac.CLR = +2.0;  // cancels CLF
+        check(!aero::balance(ac, 3.0).percent_front.has_value(),
+              "7 balance reports n/a when C_LF + C_LR = 0");
+
+        // --- F-12 Case 1 vehicle --------------------------------------------
+        auto case1 = [&](double zRF_in, double ratio_f, double as_over_l) {
+            core::VehicleInput vi;
+            vi.name = "F-12 Case 1";
+            vi.weight_N = 2000.0 * LBF;
+            vi.wheelbase_m = 100.0 * IN;
+            vi.front_weight_fraction = 1.0 - as_over_l;
+            vi.cg_height_m = 20.0 * IN;
+            vi.track_front_m = 60.0 * IN;
+            vi.track_rear_m = 60.0 * IN;
+            vi.roll_centre_height_front_m = zRF_in * IN;
+            vi.roll_centre_height_rear_m = 4.0 * IN;
+            const double sumK = 1200.0 * units::LBF_FT_PER_DEG_TO_NM_PER_RAD;
+            vi.roll_stiffness_ctg_front_Nm_per_rad = sumK * ratio_f;
+            vi.roll_stiffness_ctg_rear_Nm_per_rad = sumK * (1.0 - ratio_f);
+            return core::resolve(vi).value();
+        };
+        auto transfer_lbf = [&](const core::Vehicle& v, bool front,
+                                LegacyLoadTransfer lg = {}) {
+            LoadTransferInputs lt;
+            lt.A_Y_mps2 = G;
+            const auto w = wheel_loads(v, lt, lg);
+            return (front ? w.value().front.transfer_N : w.value().rear.transfer_N) / LBF;
+        };
+
+        // F-12: the published sweep table.
+        struct Row { double zRF, h2_in, rg, f, r; };
+        const Row rows[] = {{0, 18.0, 2.614, 313.7, 380.4}, {4, 16.0, 2.312, 344.1, 344.1},
+                            {8, 14.0, 2.013, 374.9, 308.2}, {16, 10.0, 1.423, 437.5, 237.5}};
+        for (const Row& row : rows) {
+            const core::Vehicle v = case1(row.zRF, 0.5, 0.5);
+            const std::string at = " at z_RF = " + std::to_string(int(row.zRF)) + " in";
+            close_to(v.h2() / IN, row.h2_in, 1e-6, "F-12 h2" + at);
+            close_to(v.roll_gradient_deg_per_g(), row.rg, 1e-3, "F-12 roll gradient" + at);
+            close_to(transfer_lbf(v, true), row.f, 1e-3, "F-12 front transfer" + at);
+            close_to(transfer_lbf(v, false), row.r, 1e-3, "F-12 rear transfer" + at);
+        }
+
+        // F-12 errata: aggregate fit, NOT a pointwise ordering. The front pair at
+        // z_RF = 0 ties and the z_RF = 16 rear favours the published form; both
+        // gaps are within read-off error of the plotted figure.
+        const LegacyLoadTransfer published{true, true};
+        const core::Vehicle c0 = case1(0, 0.5, 0.5), c16 = case1(16, 0.5, 0.5);
+        struct Corner { const core::Vehicle* v; bool front; double plotted; };
+        const Corner corners[] = {{&c0, true, 300.0}, {&c0, false, 370.0},
+                                  {&c16, true, 440.0}, {&c16, false, 232.0}};
+        double ec = 0.0, ep = 0.0;
+        for (const Corner& c : corners) {
+            ec += std::abs(transfer_lbf(*c.v, c.front) - c.plotted);
+            ep += std::abs(transfer_lbf(*c.v, c.front, published) - c.plotted);
+        }
+        close_to(ec, 32.0, 2e-2, "F-12 summed deviation, corrected form");
+        close_to(ep, 44.3, 2e-2, "F-12 summed deviation, published form");
+        check(ec < ep, "F-12 corrected form fits better in aggregate");
+
+        // E-1b: isolating the distribution defect from the sign defect.
+        const core::Vehicle e1b = case1(0, 2.0 / 3.0, 0.47);
+        close_to(e1b.roll_gradient_deg_per_g(), 2.63, 2e-3, "E-1b roll gradient [deg/g]");
+        close_to(transfer_lbf(e1b, true), 421.17, 1e-4, "E-1b correct front [lbf/g]");
+        close_to(transfer_lbf(e1b, false), 273.25, 1e-4, "E-1b correct rear [lbf/g]");
+        close_to(transfer_lbf(e1b, true, {false, true}), 417.37, 1e-4,
+                 "E-1b wrong distribution alone, front");
+        close_to(transfer_lbf(e1b, false, {false, true}), 277.04, 1e-4,
+                 "E-1b wrong distribution alone, rear");
+        close_to(transfer_lbf(e1b, true, {true, true}), 387.96, 1e-4,
+                 "E-1a+E-1b as printed, front");
+
+        // --- F-01 ... F-10 ---------------------------------------------------
+        const core::Vehicle ch5 = core::resolve(fixtures::ch5_input()).value();
+        close_to(ch5.W_F() / LBF / 2.0, 1054.5, 1e-9, "F-01 static front wheel load [lbf]");
+        close_to(ch5.W_R() / LBF / 2.0, 795.5, 1e-9, "F-01 static rear wheel load [lbf]");
+        close_to(longitudinal_transfer_N(ch5, 0.4 * G) / LBF, 283.25, 1e-4,
+                 "F-02 longitudinal transfer [lbf]");
+        close_to(rigid_lateral_transfer_N(ch5, 0.4 * G, 60.0 * IN) / LBF, 493.33, 1e-4,
+                 "F-03 rigid lateral transfer [lbf]");
+
+        const auto bc = analysis::banked_corner(3500.0 * LBF, 150.0 * units::MPH,
+                                                600.0 * FT, 20.0 * units::DEGREE, G);
+        close_to(bc.A_Y_over_g, 2.5072, 1e-4, "F-04 banked A_Y [g]");
+        close_to(bc.normal_load_N / LBF, 6290.2, 1e-4, "F-05 normal load [lbf]");
+        close_to(bc.lateral_force_N / LBF, 7048.9, 1e-4, "F-06 lateral force [lbf]");
+
+        close_to(analysis::flt_from_effective_height(0.35, 16.5, 61.5), 0.1878, 1e-3,
+                 "F-07 FLT front at 0.35 g");
+        close_to(analysis::lift_A_Y_over_g(23.5, 57.8), 1.2298, 1e-4,
+                 "F-08 inside-rear lift [g]");
+        close_to(analysis::sustainable_A_Y_over_g({16.5, 61.5, 2109.0 * LBF, 1.22,
+                                                   2.4e-4 / LBF}).value(),
+                 0.90698, 1e-4, "F-09 sustainable A_Y, front [g]");
+        close_to(analysis::sustainable_A_Y_over_g({23.5, 57.8, 1591.0 * LBF, 1.22,
+                                                   2.4e-4 / LBF}).value(),
+                 0.92181, 1e-4, "F-10 sustainable A_Y, rear [g]");
+
+        // --- F-11/F-11b invariants, and the blindness table -------------------
+        {
+            const core::Vehicle v = case1(0, 2.0 / 3.0, 0.47);
+            const double A_Y = 0.6 * G;
+            LoadTransferInputs lt;
+            lt.A_Y_mps2 = A_Y;
+            const auto w = wheel_loads(v, lt);
+            close_to(invariant_I3_residual(v, A_Y, w.value()), 0.0, 1e-14, "I-3 residual");
+            close_to(invariant_I3b_residual(v, A_Y, w.value(), true), 0.0, 1e-14,
+                     "I-3b residual, front");
+            const auto c = invariant_I3c(v, A_Y, w.value());
+            check(c.in_band, "I-3c roll gradient inside the physical band");
+            close_to(c.equality_residual, 0.0, 1e-14, "I-3c (9.5) equals (12.10)");
+
+            // Transfers are exactly ODD in A_Y (deviation D-4).
+            LoadTransferInputs n;
+            n.A_Y_mps2 = -A_Y;
+            const auto wn = wheel_loads(v, n);
+            close_to(w.value().front.transfer_N + wn.value().front.transfer_N, 0.0, 1e-14,
+                     "transfers are odd in A_Y");
+
+            // K_phiF <-> K_phiR swapped: I-3 blind, I-3b catches.
+            core::Vehicle sw = v;
+            std::swap(sw.K_phi_F, sw.K_phi_R);
+            const auto ws = wheel_loads(sw, lt);
+            check(std::abs(invariant_I3_residual(sw, A_Y, ws.value())) < 1e-14,
+                  "I-3 is blind to a K_phi swap");
+            check(std::abs(invariant_I3b_residual(v, A_Y, ws.value(), true)) > 1e-3,
+                  "I-3b catches a K_phi swap");
+
+            // E-1a legacy gravity sign: I-3 catches it.
+            const auto wl = wheel_loads(v, lt, LegacyLoadTransfer{true, false});
+            check(std::abs(invariant_I3_residual(v, A_Y, wl.value())) > 1e-3,
+                  "I-3 catches the E-1a gravity sign");
+        }
+
+        // --- Rule D1: wheel lift is clamped but never silent -----------------
+        {
+            LoadTransferInputs lt;
+            lt.A_Y_mps2 = 3.0 * G;
+            lt.time_s = 1.25;
+            const auto w = wheel_loads(case1(0, 0.5, 0.5), lt);
+            check(!w.value().events.empty() && w.value().events.front().code == "EV-LIFT",
+                  "EV-LIFT raised on wheel lift");
+            check(w.value().RF >= 0.0 && w.value().RR >= 0.0, "no load left negative");
+            check(w.value().front.flt > 1.0, "FLT computed before the clamp, so it exceeds 1");
+        }
     }
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
