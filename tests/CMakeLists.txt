@@ -11,6 +11,7 @@ add_executable(rcvd_tests
   test_core.cpp
   test_numerics.cpp
   test_tire.cpp
+  test_tire_models.cpp
   test_bicycle.cpp
   test_load_transfer.cpp
   test_four_wheeler.cpp

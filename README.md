@@ -17,7 +17,7 @@ Following the build order of spec Appendix C:
 | 1 | `units` — exact constants, closed vocabulary, round-trip | **done** |
 | 2 | `core` — `Result<T>`/`Diagnostic`, §14.2 register, `Vehicle` | **done** — document layer landed with step 10 |
 | 3 | `numerics` — PCHIP, Brent, LU + `rcond`, RK4, DOPRI5(4) dense output | **done** |
-| 4 | `tire` — L1, L2, conformance T1–T8, then L3/L4/L5 | **partial** — L1, L2 and the shared T1–T8 suite done; L3/L4/L5 outstanding |
+| 4 | `tire` — L1, L2, conformance T1–T8, then L3/L4/L5 | **done** — all five models pass T1–T8 |
 | 5 | `models::BicycleModel` + `analysis` → B-01 … B-31 | **done** — gate passed |
 | 6 | `aero` + `FourWheelerModel` → I-3/I-3b/I-3c, F-01 … F-12, C-02 | **done** — gate passed |
 | 7 | `analysis::moment_method` → §17.6, I-4 | **done** — plus C-01 |
@@ -105,6 +105,11 @@ include/rcvd/
   tire/      tire_model.hpp  the §6.1 contract; TireState/TireOutput (§4.3)
              linear.hpp      L1 (6.1) and L2 (6.3), with (6.10) load sensitivity
              conformance.hpp the shared T1-T8 check, applied to every model
+             table.hpp       L3 tabular, PCHIP tensor product (§6.4, D-2)
+             radt.hpp        L4 Radt non-dimensional (§6.5)
+             magic_formula.hpp  L5 Pacejka, pure lateral slip (§6.6)
+             friction.hpp    (6.9) load sensitivity, (6.11) ellipse
+             relaxation.hpp  (6.13)-(6.16) relaxation-length lag
   models/    bicycle.hpp     P1: derivatives, state space, steady state,
                              eigenstructure, transfer function (§8)
              load_transfer.hpp  §9.3-9.5 wheel loads, I-3/I-3b/I-3c, E-1a/E-1b
