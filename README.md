@@ -20,13 +20,14 @@ Following the build order of spec Appendix C:
 | 4 | `tire` — L1, L2, conformance T1–T8, then L3/L4/L5 | **partial** — L1, L2 and the shared T1–T8 suite done; L3/L4/L5 outstanding |
 | 5 | `models::BicycleModel` + `analysis` → B-01 … B-31 | **done** — gate passed |
 | 6 | `aero` + `FourWheelerModel` → I-3/I-3b/I-3c, F-01 … F-12, C-02 | **done** — gate passed |
-| 7 | `analysis::moment_method` → M-01 … M-06, I-4 | not started |
+| 7 | `analysis::moment_method` → §17.6, I-4 | **done** — plus C-01 |
 | 8 | `analysis::ride_roll` → R-01 … R-14, I-5 | **done** — plus C-04 |
-| 9–11 | lap solver, io/capi/cli, GUI | not started |
+| 9 | `analysis::lap_solve` + event location → S-01 … S-05 | **done** — plus C-03 |
+| 10–11 | io/capi/cli, GUI | not started |
 
 Both hard gates are passed: B-01 … B-31 (step 5) and I-3/I-3b/I-3c + C-02
-(step 6). Cross-checks C-02 and C-04 hold; C-01, C-03 and C-05 wait on P3 and
-the lap solver. The transient vectors (X-01 … X-13, §17.3) need a run driver
+(step 6). Cross-checks C-01, C-02, C-03 and C-04 all hold; C-05 waits on a
+slow-ramp P2 run. The transient vectors (X-01 … X-13, §17.3) need a run driver
 with event location and are not yet built.
 
 ## Building
@@ -110,6 +111,8 @@ include/rcvd/
   aero/      aero_model.hpp  §7 drag, lift, balance, density
   analysis/  pair_analysis.hpp  (17.1) and (17.2) analytic checks
              ride_roll.hpp   P6: §12 springing algebra, both directions
+             moment_method.hpp  P3: §10 sweep, boundary, trim line, metrics
+             lap_solver.hpp  P4/P5: §11 run driver with dense-output events
 tests/       Catch2 v3 suite, authoritative
   support/   defective_tire.hpp — fault injection for the conformance suite
              fixtures.hpp       — CH5, CH5-OS and "First Example" (§17.2)
