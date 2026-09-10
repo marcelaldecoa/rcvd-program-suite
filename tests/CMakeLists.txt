@@ -17,7 +17,8 @@ add_executable(rcvd_tests
   test_ride_roll.cpp
   test_moment_method.cpp
   test_lap_solver.cpp
-  test_io.cpp)
+  test_io.cpp
+  test_quantity.cpp)
 
 target_include_directories(rcvd_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -30,3 +31,16 @@ target_link_libraries(rcvd_tests PRIVATE
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 catch_discover_tests(rcvd_tests)
+
+# Rule U6 (§3.1) requires unit-mismatched arithmetic to FAIL to compile. A test
+# that must fail to build cannot live in a passing translation unit, so each case
+# in compile_fail/ is compiled on its own and the build is required to reject it.
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_FOUND)
+  add_test(NAME rule_u6_compile_failures
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_compile_fail.py
+                   --compiler ${CMAKE_CXX_COMPILER}
+                   --include  ${CMAKE_CURRENT_SOURCE_DIR}/../include
+                   --dir      ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail)
+endif()

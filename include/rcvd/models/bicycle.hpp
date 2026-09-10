@@ -14,6 +14,7 @@
 #include "rcvd/core/result.hpp"
 #include "rcvd/core/vehicle.hpp"
 #include "rcvd/numerics/linalg.hpp"
+#include "rcvd/units/quantity.hpp"
 
 namespace rcvd::models {
 
@@ -38,6 +39,31 @@ struct StabilityDerivatives {
     // §8.3: N_beta is the weathervane term, and its sign decides steady-state
     // under/oversteer. N_beta > 0 understeer, = 0 neutral, < 0 oversteer.
     [[nodiscard]] bool understeering() const { return N_beta > 0.0; }
+
+    // Rule U6 typed views. The six derivatives have FOUR distinct dimensions, and
+    // mixing them is the error this exists to make impossible:
+    //   Y_beta, Y_delta   N/rad        CorneringStiffness
+    //   Y_r               N*s/rad      SideForceDamping
+    //   N_beta, N_delta   N*m/rad      AngularStiffness
+    //   N_r               N*m*s/rad    YawDamping
+    // Displaying Y_r with the lbf*ft/deg factor — which is what I did when first
+    // writing the B-04 vector — is now a compile error rather than a wrong number.
+    [[nodiscard]] units::CorneringStiffness Y_beta_q() const {
+        return units::CorneringStiffness{Y_beta};
+    }
+    [[nodiscard]] units::SideForceDamping Y_r_q() const {
+        return units::SideForceDamping{Y_r};
+    }
+    [[nodiscard]] units::CorneringStiffness Y_delta_q() const {
+        return units::CorneringStiffness{Y_delta};
+    }
+    [[nodiscard]] units::AngularStiffness N_beta_q() const {
+        return units::AngularStiffness{N_beta};
+    }
+    [[nodiscard]] units::YawDamping N_r_q() const { return units::YawDamping{N_r}; }
+    [[nodiscard]] units::AngularStiffness N_delta_q() const {
+        return units::AngularStiffness{N_delta};
+    }
 };
 
 [[nodiscard]] inline StabilityDerivatives stability_derivatives(const core::Vehicle& v,
