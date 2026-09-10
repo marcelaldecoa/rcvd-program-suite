@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <limits>
+#include <random>
 
 #include "rcvd/core/result.hpp"
 #include "rcvd/numerics/integrate.hpp"
@@ -15,6 +17,7 @@
 #include "rcvd/numerics/roots.hpp"
 #include "rcvd/aero/aero_model.hpp"
 #include "rcvd/analysis/pair_analysis.hpp"
+#include "rcvd/analysis/ride_roll.hpp"
 #include "rcvd/models/load_transfer.hpp"
 #include "rcvd/tire/conformance.hpp"
 #include "rcvd/tire/linear.hpp"
@@ -672,6 +675,142 @@ int main() {
                   "EV-LIFT raised on wheel lift");
             check(w.value().RF >= 0.0 && w.value().RR >= 0.0, "no load left negative");
             check(w.value().front.flt > 1.0, "FLT computed before the clamp, so it exceeds 1");
+        }
+    }
+
+    std::printf("== P6 ride & roll, R-01 ... R-14 (spec 12, 17.4) ==\n");
+    {
+        using namespace rcvd::analysis;
+        const double LBF = units::POUND_FORCE, IN = units::INCH, G = units::G_STANDARD;
+        const double LBF_IN = units::LBF_PER_IN_TO_N_PER_M;
+        const double LBF_FT_DEG = units::LBF_FT_PER_DEG_TO_NM_PER_RAD;
+
+        // R-01 / R-01b: 2600 lbf sprung, h2 = 18 in, target 3.0 deg/g.
+        const double m_s = 2600.0 * LBF / G, h2 = 18.0 * IN;
+        const auto tgt = roll_stiffness_for_gradient(m_s, h2, 3.0 * units::DEGREE / G, G);
+        close_to(tgt.simplified / LBF_FT_DEG, 1300.0, 1e-9, "R-01 simplified (12.12) [lbf*ft/deg]");
+        close_to(tgt.difference / LBF_FT_DEG, 68.07, 1e-3, "R-01b gravity term m_s g h2");
+        close_to(tgt.exact / LBF_FT_DEG, 1368.07, 1e-5, "R-01b exact (12.11)");
+        // E-1c: the source's 1300 delivers 3.166 deg/g, a 5.5 % miss.
+        close_to(roll_gradient_rad_per_mps2(m_s, h2, 1300.0 * LBF_FT_DEG, G) * G / units::DEGREE,
+                 3.166, 1e-3, "E-1c delivered gradient from the simplified form");
+
+        // R-02 ... R-09: the two calculator screens.
+        close_to(roll_stiffness_from_pair(60.0 * IN, 1500.0 * LBF_IN, 1500.0 * LBF_IN) / LBF_FT_DEG,
+                 3926.98, 1e-5, "R-05 roll stiffness due to tires");
+        struct Axle { double total, ride, spring_track, kW, aux, springs; const char* name; };
+        const Axle axles[] = {{975.0, 163.6, 60.0, 183.628, 816.292, 480.736, "front"},
+                              {325.0, 123.7, 50.0, 134.818, 109.218, 245.106, "rear"}};
+        for (const Axle& a : axles) {
+            TotalsRequest req;
+            req.desired_ride_rate = a.ride * LBF_IN;
+            req.desired_roll_stiffness = a.total * LBF_FT_DEG;
+            req.tire_rate_per_tire = 1500.0 * LBF_IN;
+            req.wheel_track = 60.0 * IN;
+            req.spring_track = a.spring_track * IN;
+            const auto c = totals_to_components(req);
+            check(c.ok(), std::string("P6 direction B solves, ") + a.name);
+            close_to(c.value().wheel_centre_rate_left / LBF_IN, a.kW, 1e-5,
+                     std::string("R-03/R-07 wheel-centre rate, ") + a.name);
+            close_to(c.value().aux_roll_stiffness / LBF_FT_DEG, a.aux, 1e-5,
+                     std::string("R-04/R-08 aux roll stiffness, ") + a.name);
+            const auto t = components_to_totals(c.value(), G);
+            close_to(t.value().roll_stiffness_springs / LBF_FT_DEG, a.springs, 1e-5,
+                     std::string("R-06/R-09 roll stiffness due to springs, ") + a.name);
+            close_to(t.value().roll_stiffness_total / LBF_FT_DEG, a.total, 1e-12,
+                     std::string("A o B returns the total, ") + a.name);
+        }
+
+        // E-2: the published rates are sqrt(2) x their stated frequencies.
+        close_to(ride_rate_for_frequency(1.0, 1600.0 * LBF, G) / LBF_IN, 81.8, 1e-3,
+                 "E-2 correct front rate for 1.0 Hz [lbf/in]");
+        close_to(ride_rate_for_frequency(1.1, 1000.0 * LBF, G) / LBF_IN, 61.9, 1e-3,
+                 "E-2 correct rear rate for 1.1 Hz [lbf/in]");
+        close_to(ride_frequency_Hz(163.6 * LBF_IN, 1600.0 * LBF, G), 1.41421, 1e-3,
+                 "E-2 published 163.6 gives 1.4142 Hz");
+        close_to(ride_frequency_Hz(163.6 * LBF_IN, 1600.0 * LBF, G, true), 1.0, 1e-3,
+                 "--legacy-ride-frequency reproduces the source");
+
+        // R-10 ... R-13.
+        {
+            TotalsRequest req;
+            req.desired_ride_rate = 150.0 * LBF_IN;
+            req.desired_roll_stiffness = 1000.0 * LBF_FT_DEG;
+            req.tire_rate_per_tire = std::numeric_limits<double>::infinity();
+            req.wheel_track = 60.0 * IN;
+            req.spring_track = 60.0 * IN;
+            close_to(totals_to_components(req).value().aux_roll_stiffness / LBF_FT_DEG,
+                     607.301, 1e-5, "R-10 aux with rigid tires");
+        }
+        close_to(ride_rate(1500.0 * LBF_IN, 150.0 * LBF_IN) / LBF_IN, 136.364, 1e-5, "R-11");
+        close_to(ride_rate(1550.0 * LBF_IN, 150.0 * LBF_IN) / LBF_IN, 136.765, 1e-5, "R-12");
+        close_to(wheel_centre_rate(1500.0 * LBF_IN, 136.76 * LBF_IN).value() / LBF_IN,
+                 150.49, 1e-4, "R-13");
+
+        // Guards.
+        check(wheel_centre_rate(1500.0 * LBF_IN, 1500.0 * LBF_IN).error().code == "E-RR-010",
+              "E-RR-010 when the desired ride rate reaches the tire rate");
+        {
+            TotalsRequest req;
+            req.tire_rate_per_tire = 1500.0 * LBF_IN;
+            req.wheel_track = 60.0 * IN;
+            req.spring_track = 60.0 * IN;
+            req.desired_ride_rate = 150.0 * LBF_IN;
+            req.desired_roll_stiffness = 4000.0 * LBF_FT_DEG;
+            check(totals_to_components(req).error().code == "E-RR-020",
+                  "E-RR-020 above the tires' own roll stiffness");
+        }
+
+        // R-14 / I-5: the two directions are exact inverses.
+        {
+            std::mt19937_64 rng(20260909);
+            std::uniform_real_distribution<double> U(0.0, 1.0);
+            auto pick = [&](double lo, double hi) { return lo + U(rng) * (hi - lo); };
+            double worst = 0.0;
+            int n = 0;
+            for (int i = 0; i < 10000; ++i) {
+                TotalsRequest req;
+                req.tire_rate_per_tire = pick(800.0, 2500.0) * LBF_IN;
+                req.wheel_track = pick(45.0, 75.0) * IN;
+                req.spring_track = pick(35.0, 75.0) * IN;
+                req.desired_ride_rate = pick(0.05, 0.55) * req.tire_rate_per_tire;
+                const double K_tire = roll_stiffness_from_pair(
+                    req.wheel_track, req.tire_rate_per_tire, req.tire_rate_per_tire);
+                req.desired_roll_stiffness = pick(0.05, 0.7) * K_tire;
+                const auto c = totals_to_components(req);
+                if (!c.ok()) continue;
+                const auto t = components_to_totals(c.value(), G);
+                if (!t.ok()) continue;
+                ++n;
+                worst = std::max(worst,
+                                 std::abs(t.value().ride_rate - req.desired_ride_rate) /
+                                     req.desired_ride_rate);
+                worst = std::max(worst,
+                                 std::abs(t.value().roll_stiffness_total -
+                                          req.desired_roll_stiffness) /
+                                     req.desired_roll_stiffness);
+            }
+            check(n > 9000, "I-5 ran " + std::to_string(n) + " admissible cases");
+            check(worst < 1e-12, "R-14 round trip worst error " + std::to_string(worst));
+        }
+
+        // C-04: P6 into P2 reproduces the target roll gradient, against R-01b.
+        {
+            struct Sp { double share, ride, track; };
+            const Sp sps[] = {{0.75, 163.6, 60.0}, {0.25, 123.7, 50.0}};
+            double sumK = 0.0;
+            for (const Sp& s : sps) {
+                TotalsRequest req;
+                req.desired_ride_rate = s.ride * LBF_IN;
+                req.desired_roll_stiffness = s.share * tgt.exact;
+                req.tire_rate_per_tire = 1500.0 * LBF_IN;
+                req.wheel_track = 60.0 * IN;
+                req.spring_track = s.track * IN;
+                sumK += components_to_totals(totals_to_components(req).value(), G)
+                            .value().roll_stiffness_total;
+            }
+            close_to(roll_gradient_rad_per_mps2(m_s, h2, sumK, G) * G / units::DEGREE, 3.0,
+                     1e-9, "C-04 delivered roll gradient [deg/g]");
         }
     }
 

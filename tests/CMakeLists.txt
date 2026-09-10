@@ -13,7 +13,8 @@ add_executable(rcvd_tests
   test_tire.cpp
   test_bicycle.cpp
   test_load_transfer.cpp
-  test_four_wheeler.cpp)
+  test_four_wheeler.cpp
+  test_ride_roll.cpp)
 
 target_include_directories(rcvd_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

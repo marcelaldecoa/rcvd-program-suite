@@ -19,11 +19,15 @@ Following the build order of spec Appendix C:
 | 3 | `numerics` — PCHIP, Brent, LU + `rcond`, RK4, DOPRI5(4) dense output | **done** |
 | 4 | `tire` — L1, L2, conformance T1–T8, then L3/L4/L5 | **partial** — L1, L2 and the shared T1–T8 suite done; L3/L4/L5 outstanding |
 | 5 | `models::BicycleModel` + `analysis` → B-01 … B-31 | **done** — gate passed |
-| 6 | `aero` + `FourWheelerModel` → I-3/I-3b/I-3c, F-01 … F-12, C-02 | **partial** — aero, the §9.3 load model and all F-vectors done; the EOM (9.11)–(9.14) and C-02 outstanding |
-| 7–11 | MMM, ride/roll, lap solver, io/capi/cli, GUI | not started |
+| 6 | `aero` + `FourWheelerModel` → I-3/I-3b/I-3c, F-01 … F-12, C-02 | **done** — gate passed |
+| 7 | `analysis::moment_method` → M-01 … M-06, I-4 | not started |
+| 8 | `analysis::ride_roll` → R-01 … R-14, I-5 | **done** — plus C-04 |
+| 9–11 | lap solver, io/capi/cli, GUI | not started |
 
-Step 5 was a hard gate; B-01 … B-31 pass, so step 6 is unblocked. The transient
-vectors (X-01 … X-13, §17.3) need a time-integration driver and are not yet built.
+Both hard gates are passed: B-01 … B-31 (step 5) and I-3/I-3b/I-3c + C-02
+(step 6). Cross-checks C-02 and C-04 hold; C-01, C-03 and C-05 wait on P3 and
+the lap solver. The transient vectors (X-01 … X-13, §17.3) need a run driver
+with event location and are not yet built.
 
 ## Building
 
@@ -46,7 +50,7 @@ mirrors the same assertions with no dependencies, and **is** verified:
 cl /nologo /std:c++20 /EHsc /W4 /WX /permissive- /fp:precise /I include /Fe:verify.exe tools/verify_standalone.cpp
 ```
 
-197 assertions, all passing. To get the authoritative suite running,
+225 assertions, all passing. To get the authoritative suite running,
 `winget install Kitware.CMake` and use the CMake path above.
 
 ## The conformance suite is itself tested
@@ -101,8 +105,11 @@ include/rcvd/
   models/    bicycle.hpp     P1: derivatives, state space, steady state,
                              eigenstructure, transfer function (§8)
              load_transfer.hpp  §9.3-9.5 wheel loads, I-3/I-3b/I-3c, E-1a/E-1b
+             plant.hpp       the §4.3 Plant contract, §5.6 maneuvers, §5.5 switches
+             four_wheeler.hpp   P2: (9.11)-(9.14), the §9.7 algebraic loop
   aero/      aero_model.hpp  §7 drag, lift, balance, density
   analysis/  pair_analysis.hpp  (17.1) and (17.2) analytic checks
+             ride_roll.hpp   P6: §12 springing algebra, both directions
 tests/       Catch2 v3 suite, authoritative
   support/   defective_tire.hpp — fault injection for the conformance suite
              fixtures.hpp       — CH5, CH5-OS and "First Example" (§17.2)
