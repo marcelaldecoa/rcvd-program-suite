@@ -2554,8 +2554,29 @@ output, or state that the reported loads are the flat-surface values.
 
 against the plotted ≈300 → 440 (front) and ≈370 → 232 (rear). The published four-term
 decomposition, with its gravity term subtracting and distributed by sprung-weight fraction,
-gives 286.3 → 429.2 and 353.0 → 229.2 — further from the plotted curve at every point.
-This is the numerical evidence for errata E-1a and E-1b (§19).
+gives 286.3 → 429.2 and 353.0 → 229.2 — further from the plotted curve in **aggregate**:
+summed absolute deviation across the four plotted corners is **32.0 lbf/g for (9.6a)–(9.6b)
+against 44.3 for the published form**.
+
+**Not, however, at every point**, and an implementation SHALL NOT assert that it is:
+
+| `z_RF` | axle | (9.6a)–(9.6b) | published | plotted | \|err\| correct | \|err\| published |
+|---|---|---|---|---|---|---|
+| 0 in | front | 313.7 | 286.3 | ≈300 | 13.7 | 13.7 |
+| 0 in | rear | 380.4 | 353.0 | ≈370 | 10.4 | 17.0 |
+| 16 in | front | 437.5 | 429.2 | ≈440 | 2.5 | 10.8 |
+| 16 in | rear | 237.5 | 229.2 | ≈232 | 5.5 | **2.8** |
+
+The front pair at `z_RF` = 0 is an exact tie, and at `z_RF` = 16 in the rear the published
+form is the nearer of the two. Both gaps are a few lbf against values read off a plotted
+figure ([R280] Fig. 18.2), whose read-off error is comparable, so neither corner is
+evidence either way.
+
+**The decisive evidence for E-1a is therefore I-3, not this curve.** The published gravity
+sign violates the whole-vehicle roll-moment balance (9.10) with a residual of order 1 —
+exactly, analytically, and independently of anything read off a page. F-12 corroborates in
+aggregate; it does not carry the argument alone. The acceptance test SHALL assert the
+aggregate deviation and the I-3 residual, never a pointwise ordering.
 
 F-09/F-10 use the closed-form solution of the load-sensitive pair equation, which the
 implementation SHALL also reproduce as a limiting analytic check on the numerical solver.
@@ -2567,7 +2588,8 @@ coefficients `c0`, `c1` of (6.10), which have different dimensions:
                                                                         fraction        (17.1)
 ```
 
-F-12 is the primary evidence for errata E-1a and E-1b (§9.3, §19).
+F-12 **corroborates** errata E-1a and E-1b (§9.3, §19); the primary evidence is the exact
+I-3 moment-balance violation, per the note above.
 
 ### 17.6 P3 — Moment Method acceptance vectors
 
