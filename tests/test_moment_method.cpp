@@ -51,7 +51,7 @@ tire::LinearTire axle_tire(double axle_C_lbf_per_deg, double alpha_bk_deg = 6.0)
 }  // namespace
 
 // ------------------------------------------------------- §17.6 construction lines
-TEST_CASE("§17.6: all twenty construction-line coordinates", "[mmm][acceptance]") {
+TEST_CASE("17.6: all twenty construction-line coordinates", "[mmm][acceptance]") {
     // §17.6 sets this block's tolerance to 5e-3, with the reason recorded: the
     // residual is dominated by the source's rounding to three significant figures,
     // not by the gravity constant.
@@ -91,7 +91,7 @@ TEST_CASE("§17.6: all twenty construction-line coordinates", "[mmm][acceptance]
     REQUIRE_THAT(la.front_A_Y_bar / 1.30 - 1.0, WithinAbs(4.2e-3, 2e-4));
 }
 
-TEST_CASE("§10.4: the numerical sweep reproduces the analytic (10.5) limits",
+TEST_CASE("10.4: the numerical sweep reproduces the analytic (10.5) limits",
           "[mmm][acceptance]") {
     // "The front and rear construction lines are obtained by the same sweep with
     // the other axle's force set to zero, which reduces to (10.5) for L2."
@@ -122,7 +122,7 @@ TEST_CASE("§10.4: the numerical sweep reproduces the analytic (10.5) limits",
 }
 
 // ----------------------------------------------------------- §10.5 classification
-TEST_CASE("§17.6: limit character from the diagram", "[mmm][acceptance]") {
+TEST_CASE("17.6: limit character from the diagram", "[mmm][acceptance]") {
     // Character is decided by the sign of C_N at the diagram's extreme |A_Y| point,
     // relative to the trim line (C_N = 0): above => spin, on => drift, below => plow.
     struct Case { const char* name; double a, b, C_F, C_R; LimitCharacter expect; };
@@ -155,7 +155,7 @@ TEST_CASE("§17.6: limit character from the diagram", "[mmm][acceptance]") {
     }
 }
 
-TEST_CASE("limit character agrees with the §8.5 understeer gradient", "[mmm][invariant]") {
+TEST_CASE("limit character agrees with the 8.5 understeer gradient", "[mmm][invariant]") {
     // Two independent routes to the same answer: the sign of K from (8.14) and the
     // sign of C_N at the diagram's limit point. They must agree for every case.
     struct Case { const char* name; double a, b, C_F, C_R; };
@@ -216,7 +216,7 @@ TEST_CASE("(10.6) vs (10.7): stability index against its analytic value", "[mmm]
     REQUIRE_THAT(m.control_moment, WithinRel(cm, 1e-6));
 }
 
-TEST_CASE("§10.3: the sweep uses r/u, not r/V", "[mmm]") {
+TEST_CASE("10.3: the sweep uses r/u, not r/V", "[mmm]") {
     // (3.1) is normative on the body-frame longitudinal velocity, and the sweep
     // reaches +/-10 deg or more where cos(beta) differs from 1 by 1.5 %.
     const core::Vehicle v = mmm_vehicle(5, 5);
@@ -238,7 +238,7 @@ TEST_CASE("§10.3: the sweep uses r/u, not r/V", "[mmm]") {
 }
 
 // ---------------------------------------------------------------- §10.4 boundary
-TEST_CASE("§10.4: the boundary is the image of the rectangle's edge, not a hull",
+TEST_CASE("10.4: the boundary is the image of the rectangle's edge, not a hull",
           "[mmm]") {
     // "The true boundary is generally NON-CONVEX — the re-entrant corner is
     // precisely what distinguishes terminal plow from terminal spin — so any
@@ -286,7 +286,7 @@ TEST_CASE("§10.4: the boundary is the image of the rectangle's edge, not a hull
 }
 
 // ---------------------------------------------------------------- §10.5 trim line
-TEST_CASE("§10.5: the trim line is the C_N = 0 locus", "[mmm]") {
+TEST_CASE("10.5: the trim line is the C_N = 0 locus", "[mmm]") {
     const core::Vehicle v = mmm_vehicle(4, 6);
     auto tF = axle_tire(420.0);
     auto tR = axle_tire(420.0);

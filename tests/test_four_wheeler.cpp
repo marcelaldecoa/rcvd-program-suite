@@ -47,7 +47,7 @@ tire::LinearTire half_axle(double axle_C_N_per_rad) {
 }  // namespace
 
 // -------------------------------------------------------------- §9.14 slip angles
-TEST_CASE("§9.14: outside wheels travel faster in a turn", "[fourwheeler]") {
+TEST_CASE("9.14: outside wheels travel faster in a turn", "[fourwheeler]") {
     const core::Vehicle v = ch5_with_springing();
     SolverSettings cfg;
 
@@ -89,7 +89,7 @@ TEST_CASE("EV-WHEEL-STALL below the speed floor", "[fourwheeler][validation]") {
     for (double a : sa.alpha) REQUIRE(std::isfinite(a));
 }
 
-TEST_CASE("§9.14: the small-angle switch is unconditional", "[fourwheeler]") {
+TEST_CASE("9.14: the small-angle switch is unconditional", "[fourwheeler]") {
     // §3.3 as corrected: arctan is normative and there is NO automatic threshold
     // switch. small_angle_slip forces v/u whatever the magnitude.
     const core::Vehicle v = ch5_with_springing();
@@ -360,7 +360,7 @@ TEST_CASE("C-02 holds under time integration, not just pointwise",
 }
 
 // ---------------------------------------------------------- §9.7 algebraic loop
-TEST_CASE("§9.7: implicit and explicit load-transfer coupling agree at steady state",
+TEST_CASE("9.7: implicit and explicit load-transfer coupling agree at steady state",
           "[fourwheeler]") {
     const core::Vehicle veh = ch5_with_springing();
     const auto C = fixtures::ch5_tires();
@@ -395,7 +395,7 @@ TEST_CASE("§9.7: implicit and explicit load-transfer coupling agree at steady s
     REQUIRE(std::abs(oi.phi_prime) < 1.0);
 }
 
-TEST_CASE("§9.8: yaw_moment_residual vanishes at steady state", "[fourwheeler]") {
+TEST_CASE("9.8: yaw_moment_residual vanishes at steady state", "[fourwheeler]") {
     // "At steady state it must be zero; carrying it as an output channel makes the
     // approach to steady state visible and is the primary debugging aid for P2."
     const core::Vehicle veh = ch5_with_springing();
@@ -426,7 +426,7 @@ TEST_CASE("§9.8: yaw_moment_residual vanishes at steady state", "[fourwheeler]"
     REQUIRE_THAT(obs.A_Y, WithinRel(ss.value().A_Y_mps2, 1e-9));
 }
 
-TEST_CASE("§9.6 sign trap: asymmetric Fx produces the correct yaw moment",
+TEST_CASE("9.6 sign trap: asymmetric Fx produces the correct yaw moment",
           "[fourwheeler][regression]") {
     // "A defect that a symmetric-input test can never reveal." The couple is
     // (t/2)(Fx_left - Fx_right); writing it the other way silently reverses the
@@ -448,7 +448,7 @@ TEST_CASE("§9.6 sign trap: asymmetric Fx produces the correct yaw moment",
 }
 
 // ------------------------------------------------------------------- §5.6 inputs
-TEST_CASE("§5.6: maneuvers and their discontinuities", "[fourwheeler][maneuver]") {
+TEST_CASE("5.6: maneuvers and their discontinuities", "[fourwheeler][maneuver]") {
     const auto step = Maneuver::make_step(0.1, 0.5);
     REQUIRE(step.delta_at(0.4) == 0.0);
     REQUIRE(step.delta_at(0.5) == 0.1);

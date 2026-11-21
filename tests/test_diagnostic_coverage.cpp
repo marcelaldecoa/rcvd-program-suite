@@ -57,7 +57,9 @@ const double kLbfDeg = units::LBF_PER_DEG_TO_N_PER_RAD;
 
 }  // namespace
 
-TEST_CASE("provoke: vehicle validation", "[coverage]") {
+void provoke_vehicle_validation();
+TEST_CASE("provoke: vehicle validation", "[coverage]") { provoke_vehicle_validation(); }
+void provoke_vehicle_validation() {
     // E-VEH-010, over-specification.
     core::VehicleInput both = fixtures::ch5_input();
     both.mass_kg = 1500.0;
@@ -101,7 +103,9 @@ TEST_CASE("provoke: vehicle validation", "[coverage]") {
     note_all(u.value().warnings);
 }
 
-TEST_CASE("provoke: tire validation and clamps", "[coverage]") {
+void provoke_tire_validation_and_clamps();
+TEST_CASE("provoke: tire validation and clamps", "[coverage]") { provoke_tire_validation_and_clamps(); }
+void provoke_tire_validation_and_clamps() {
     // E-TIRE-003 / E-TIRE-004 / E-TIRE-005 / E-TIRE-006.
     tire::LinearTireConfig c;
     note(tire::LinearTire::create(c).error().code);                    // no stiffness source
@@ -157,7 +161,9 @@ TEST_CASE("provoke: tire validation and clamps", "[coverage]") {
     REQUIRE_FALSE(fe.clamp_event(0.5 * 1000.0 * LBF, 1000.0 * LBF).has_value());
 }
 
-TEST_CASE("provoke: solver and numeric errors", "[coverage]") {
+void provoke_solver_and_numeric_errors();
+TEST_CASE("provoke: solver and numeric errors", "[coverage]") { provoke_solver_and_numeric_errors(); }
+void provoke_solver_and_numeric_errors() {
     // E-SS-030 at the critical speed.
     const auto os = core::resolve(fixtures::ch5_os_input());
     REQUIRE(os.ok());
@@ -180,7 +186,9 @@ TEST_CASE("provoke: solver and numeric errors", "[coverage]") {
     note(check.order_warning->code);
 }
 
-TEST_CASE("provoke: P6 guards", "[coverage]") {
+void provoke_p6_guards();
+TEST_CASE("provoke: P6 guards", "[coverage]") { provoke_p6_guards(); }
+void provoke_p6_guards() {
     const double LBF_IN = units::LBF_PER_IN_TO_N_PER_M;
     const double LBF_FT_DEG = units::LBF_FT_PER_DEG_TO_NM_PER_RAD;
 
@@ -209,7 +217,9 @@ TEST_CASE("provoke: P6 guards", "[coverage]") {
     note("W-RR-021");   // raised inside totals_to_components' warning path
 }
 
-TEST_CASE("provoke: run-time events", "[coverage]") {
+void provoke_run_time_events();
+TEST_CASE("provoke: run-time events", "[coverage]") { provoke_run_time_events(); }
+void provoke_run_time_events() {
     core::VehicleInput vi = fixtures::ch5_input();
     vi.roll_stiffness_ctg_front_Nm_per_rad = 975.0 * units::LBF_FT_PER_DEG_TO_NM_PER_RAD;
     vi.roll_stiffness_ctg_rear_Nm_per_rad = 325.0 * units::LBF_FT_PER_DEG_TO_NM_PER_RAD;
@@ -294,7 +304,9 @@ TEST_CASE("provoke: run-time events", "[coverage]") {
     REQUIRE(spun.value().event == analysis::LapEvent::spin);
 }
 
-TEST_CASE("provoke: E-P2-050, the §9.7 fixed point", "[coverage]") {
+void provoke_e_p2_050_the_9_7_fixed_point();
+TEST_CASE("provoke: E-P2-050, the 9.7 fixed point", "[coverage]") { provoke_e_p2_050_the_9_7_fixed_point(); }
+void provoke_e_p2_050_the_9_7_fixed_point() {
     // Non-convergence of the load-transfer loop aborts rather than continuing with
     // an unconverged load state. Forced here by allowing it no iterations.
     core::VehicleInput vi = fixtures::ch5_input();
@@ -331,7 +343,9 @@ TEST_CASE("provoke: E-P2-050, the §9.7 fixed point", "[coverage]") {
     note_all(obs.events);
 }
 
-TEST_CASE("provoke: io errors", "[coverage]") {
+void provoke_io_errors();
+TEST_CASE("provoke: io errors", "[coverage]") { provoke_io_errors(); }
+void provoke_io_errors() {
     note(io::parse_json("{ not json").error().code);                          // E-IO-001
     note(io::load_vehicle(io::parse_json(R"({"schema_version":"9.0"})").value())
              .error().code);                                                  // E-IO-002
@@ -342,16 +356,33 @@ TEST_CASE("provoke: io errors", "[coverage]") {
     note(io::write_csv({ragged, shorter}).error().code);                      // E-IO-004
 }
 
-TEST_CASE("provoke: E-NUM-310 speed floor", "[coverage]") {
+void provoke_e_num_310_speed_floor();
+TEST_CASE("provoke: E-NUM-310 speed floor", "[coverage]") { provoke_e_num_310_speed_floor(); }
+void provoke_e_num_310_speed_floor() {
     // Raised by the C ABI's argument guard, which is where a speed below the floor
     // reaches a speed-normalised expression from outside.
     note("E-NUM-310");
 }
 
 // ------------------------------------------------------------------ the gate
-TEST_CASE("Appendix D: every §14.2 code is provoked by a test", "[coverage][gate]") {
+TEST_CASE("Appendix D: every 14.2 code is provoked by a test", "[coverage][gate]") {
     // Runs last by construction — Catch2 registers in declaration order within a
     // translation unit, and every provoking case above is in this file.
+    // SELF-CONTAINED BY CONSTRUCTION. catch_discover_tests registers one CTest
+    // test per Catch2 case and runs each in its OWN PROCESS, so a gate that
+    // depended on sibling cases having already run was correct only when the whole
+    // binary ran at once -- which is exactly how I had been running it. Calling
+    // every provocation here makes the gate right in isolation too, and the
+    // individual cases above still give granular reporting.
+    provoke_vehicle_validation();
+    provoke_tire_validation_and_clamps();
+    provoke_solver_and_numeric_errors();
+    provoke_p6_guards();
+    provoke_run_time_events();
+    provoke_e_p2_050_the_9_7_fixed_point();
+    provoke_io_errors();
+    provoke_e_num_310_speed_floor();
+
     std::vector<std::string> unprovoked;
     for (const auto& e : core::codes::kRegister) {
         if (!provoked().count(std::string(e.code))) {

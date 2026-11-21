@@ -386,7 +386,7 @@ TEST_CASE("W-RR-021: a negative bar rate is reported, not clamped",
 }
 
 // -------------------------------------------------------------- §12.1 conventions
-TEST_CASE("§12.1: the installation ratio is squared, and is travel per travel",
+TEST_CASE("12.1: the installation ratio is squared, and is travel per travel",
           "[rideroll]") {
     const double k_S = 200.0 * LBF_IN;
     // IR < 1 (spring inboard of the wheel) gives a SOFTER wheel-centre rate.
@@ -403,7 +403,7 @@ TEST_CASE("§12.1: the installation ratio is squared, and is travel per travel",
             rocker_rate_ratio(1.0, 0.6, 0.2, 0.5, 0.0));
 }
 
-TEST_CASE("§12.1: split rates, and (12.6) as the symmetric case", "[rideroll]") {
+TEST_CASE("12.1: split rates, and (12.6) as the symmetric case", "[rideroll]") {
     const double t = 60.0 * IN, k = 150.0 * LBF_IN;
     // (12.6) K = k*t^2/2 for k_left == k_right.
     REQUIRE_THAT(roll_stiffness_from_pair(t, k, k), WithinRel(0.5 * k * t * t, 1e-15));
@@ -413,7 +413,7 @@ TEST_CASE("§12.1: split rates, and (12.6) as the symmetric case", "[rideroll]")
     REQUIRE(roll_stiffness_from_pair(t, 0.5 * k, k) < roll_stiffness_from_pair(t, k, k));
 }
 
-TEST_CASE("§12.1: wheel track and spring track are not interchangeable", "[rideroll]") {
+TEST_CASE("12.1: wheel track and spring track are not interchangeable", "[rideroll]") {
     // Using the wrong one is a (t_wheel/t_spring)^2 error — 44 % for 60 in / 50 in.
     const double wheel = roll_stiffness_from_pair(60.0 * IN, 150.0 * LBF_IN, 150.0 * LBF_IN);
     const double spring = roll_stiffness_from_pair(50.0 * IN, 150.0 * LBF_IN, 150.0 * LBF_IN);

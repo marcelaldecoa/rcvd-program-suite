@@ -59,7 +59,7 @@ double transfer_lbf_per_g(const core::Vehicle& v, bool front, LegacyLoadTransfer
 }  // namespace
 
 // ------------------------------------------------------------------- §7 aero
-TEST_CASE("§7: downforce increases the D-1 load magnitude", "[aero]") {
+TEST_CASE("7: downforce increases the D-1 load magnitude", "[aero]") {
     aero::AeroConfig c;
     c.frontal_area_m2 = 2.0;
     c.CD = 0.5;
@@ -80,7 +80,7 @@ TEST_CASE("§7: downforce increases the D-1 load magnitude", "[aero]") {
     REQUIRE(still.downforce_front_N == 0.0);
 }
 
-TEST_CASE("§7: aerodynamic balance is n/a when the lifts cancel", "[aero]") {
+TEST_CASE("7: aerodynamic balance is n/a when the lifts cancel", "[aero]") {
     aero::AeroConfig c;
     c.CLF = -2.6;
     c.CLR = -2.4;
@@ -96,7 +96,7 @@ TEST_CASE("§7: aerodynamic balance is n/a when the lifts cancel", "[aero]") {
     REQUIRE_FALSE(n.x_cp_aft_of_front_axle_m.has_value());
 }
 
-TEST_CASE("§7 (7.5): air density correction", "[aero]") {
+TEST_CASE("7 (7.5): air density correction", "[aero]") {
     REQUIRE_THAT(aero::air_density(aero::kPStd, aero::kTStd), WithinRel(aero::kRhoStd, 1e-15));
     // Hotter air is thinner.
     REQUIRE(aero::air_density(aero::kPStd, 313.15) < aero::kRhoStd);
@@ -401,7 +401,7 @@ TEST_CASE("EV-LIFT: wheel lift is clamped but never silent", "[loadtransfer][val
     REQUIRE(w.value().front.flt > 1.0);
 }
 
-TEST_CASE("§9.4: transfer and FLT are distinct quantities", "[loadtransfer]") {
+TEST_CASE("9.4: transfer and FLT are distinct quantities", "[loadtransfer]") {
     // Deviation D-3: confusing them is a factor-of-two error that silently halves
     // or doubles every wheel load.
     const core::Vehicle v = f12_case1(0.0);
@@ -418,7 +418,7 @@ TEST_CASE("§9.4: transfer and FLT are distinct quantities", "[loadtransfer]") {
                  WithinRel(2.0 * w.value().front.transfer_N, 1e-12));
 }
 
-TEST_CASE("§9.3 step 2/3: aero and longitudinal transfer enter the assembly",
+TEST_CASE("9.3 step 2/3: aero and longitudinal transfer enter the assembly",
           "[loadtransfer]") {
     const core::Vehicle v = f12_case1(0.0);
     LoadTransferInputs lt;

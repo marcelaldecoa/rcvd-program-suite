@@ -40,7 +40,7 @@ TEST_CASE("diagnostics carry when and where", "[core]") {
     REQUIRE(to_string(*d.wheel) == "RR");
 }
 
-TEST_CASE("the §14.2 register is well formed", "[core]") {
+TEST_CASE("the 14.2 register is well formed", "[core]") {
     // Appendix D requires every code to have a test that provokes it. That gate
     // iterates this table, so the table must have unique, correctly-prefixed codes.
     for (const auto& e : codes::kRegister) {

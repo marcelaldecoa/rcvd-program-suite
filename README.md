@@ -72,20 +72,27 @@ gate.
 
 ```bash
 winget install Kitware.CMake
-cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake -S . -B build
+cmake --build build --config RelWithDebInfo
+ctest --test-dir build -C RelWithDebInfo --output-on-failure
 ```
 
-Catch2 is fetched automatically. **This has not yet been run** — this machine has
-MSVC 14.44 but no CMake, so `tests/` has been type-checked and executed against a
-local shim rather than real Catch2. Path 1 is what has actually been verified.
+The config goes on the **build** line, not the configure line. CMake's default
+generator here is Visual Studio 17 2022, which is multi-config, so
+`-DCMAKE_BUILD_TYPE=...` is silently ignored — CMake says so:
+`Manually-specified variables were not used by the project: CMAKE_BUILD_TYPE`.
+
+Catch2 is fetched automatically. **Verified: 195/195 tests pass** — 7,944
+assertions across 194 Catch2 cases plus the Rule U6 compile-failure gate, each
+case in its own process, under CMake 4.4.4 and MSVC 19.44 at RelWithDebInfo.
 
 ## Running the CLI
 
 ```powershell
-pwsh tools/build_cli.ps1        # produces .cvd-cli.exe
-.cvd-cli.exe --help
+pwsh tools/build_cli.ps1        # produces .
+cvd-cli.exe
+.
+cvd-cli.exe --help
 ```
 
 `rcvd-cli` is a single translation unit — everything it needs is header-only —
@@ -95,15 +102,18 @@ Three commands, all taking a §5.1 vehicle document:
 
 ```powershell
 # stability derivatives and handling metrics (B-03 ... B-08, B-10, B-11, B-26)
-.cvd-cli.exe derivs --vehicle examples/ch5.json --units us --in-units us `
+.
+cvd-cli.exe derivs --vehicle examples/ch5.json --units us --in-units us `
                 --cf -640 --cr -580 --speed 30
 
 # steady-state response at a given steer angle
-.cvd-cli.exe steady --vehicle examples/ch5.json --units us --in-units us `
+.
+cvd-cli.exe steady --vehicle examples/ch5.json --units us --in-units us `
                 --cf -640 --cr -580 --speed 30 --steer 3
 
 # a lap of a circular circuit, optionally writing the path and a run manifest
-.cvd-cli.exe lap --vehicle examples/ch5.json --units us --in-units us `
+.
+cvd-cli.exe lap --vehicle examples/ch5.json --units us --in-units us `
                 --cf -640 --cr -580 --speed 27.3 --steer 3.99 `
                 --inner 100 --outer 400 --start 150 `
                 --csv path.csv --manifest run.json

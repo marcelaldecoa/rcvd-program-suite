@@ -137,7 +137,7 @@ TEST_CASE("B-03 ... B-08: stability derivatives at 44 ft/s", "[bicycle][acceptan
     REQUIRE_THAT(to_lbf_ft_per_deg(d.N_delta), WithinRel(2396.53, 1e-4));
 }
 
-TEST_CASE("§8.4 second-column trap and B sign", "[bicycle][regression]") {
+TEST_CASE("8.4 second-column trap and B sign", "[bicycle][regression]") {
     const core::Vehicle v = ch5();
     const double V = 44.0 * units::FOOT;
     const auto d = stability_derivatives(v, fixtures::ch5_tires(), V);

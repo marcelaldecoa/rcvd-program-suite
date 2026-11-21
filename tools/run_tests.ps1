@@ -49,20 +49,30 @@ $exe = Join-Path $out 'verify.exe'
 
 # NOTE the two include paths. tools/verify_standalone.cpp pulls in the shared
 # fixtures under tests/support, so `-I include` alone does not compile.
+# BUILD AT BOTH OPTIMISATION LEVELS. /Od and /O2 run different static analyses:
+# MSVC's dataflow warnings (C4723 and friends) only fire once the optimiser has
+# done constant propagation, so a /Od-only check can pass while the release build
+# fails §4.2's /WX. That is exactly what happened here — every scratchpad build was
+# unoptimised, and the first real RelWithDebInfo build failed on a warning nothing
+# had ever surfaced. /fp:precise keeps Rule A2 reproducibility at both levels, and
+# running both binaries also checks that the optimiser has not changed an answer.
 $flags = '/nologo /std:c++20 /EHsc /W4 /WX /permissive- /fp:precise'
-$cmd = "cl $flags /I `"$repo\include`" /I `"$repo\tests`" /Fe:`"$exe`" /Fo`"$out\\`" `"$repo\tools\verify_standalone.cpp`""
+$driverOk = $true
 
-Write-Host "==> building the standalone acceptance driver" -ForegroundColor Cyan
-if ($vcvars) {
-    cmd /c "`"$vcvars`" >nul 2>&1 && $cmd"
-} else {
-    cmd /c $cmd
+foreach ($opt in @('/Od', '/O2')) {
+    $tag = $opt.Substring(1)
+    $exeN = Join-Path $out "verify_$tag.exe"
+    $cmd = "cl $flags $opt /I `"$repo\include`" /I `"$repo\tests`" /Fe:`"$exeN`" /Fo`"$out\${tag}_`" `"$repo\tools\verify_standalone.cpp`""
+
+    Write-Host "==> building the standalone acceptance driver ($opt)" -ForegroundColor Cyan
+    if ($vcvars) { cmd /c "`"$vcvars`" >nul 2>&1 && $cmd" } else { cmd /c $cmd }
+    if (-not (Test-Path $exeN)) { throw "build failed at $opt" }
+
+    Write-Host "==> running it ($opt)" -ForegroundColor Cyan
+    & $exeN | Select-Object -Last 2
+    if ($LASTEXITCODE -ne 0) { $driverOk = $false }
+    $exe = $exeN
 }
-if (-not (Test-Path $exe)) { throw "build failed" }
-
-Write-Host "==> running it" -ForegroundColor Cyan
-& $exe
-$driverOk = ($LASTEXITCODE -eq 0)
 
 $u6Ok = $true
 if (Get-Command python -ErrorAction SilentlyContinue) {

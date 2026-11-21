@@ -78,6 +78,23 @@ struct AeroBalance {
     std::optional<double> x_cp_aft_of_front_axle_m;
 };
 
+// MSVC C4723, "potential divide by 0", is a FALSE POSITIVE on this function: the
+// guard returns before either division whenever `sum` could be zero. It appears
+// only in an OPTIMISED build, and only when the n/a path is exercised with
+// exactly-cancelling constants through Catch2's expression-decomposition
+// templates — constant propagation folds `sum` to 0.0 and the analyser sees the
+// division in a branch it has not yet eliminated. Neither the function alone nor
+// the same call site outside Catch2 reproduces it.
+//
+// The pragma must enclose the WHOLE FUNCTION, not just the division statements:
+// C4723 is emitted by the optimiser back end, and push/disable inside a function
+// body has no effect on back-end warnings. §4.2's /WX stays in force everywhere
+// else, and this is deliberately NOT "fixed" by adding `sum == 0.0` to the guard
+// — §13.1 forbids bare equality against zero and the tolerance test subsumes it.
+#if defined(_MSC_VER)
+#  pragma warning(push)
+#  pragma warning(disable : 4723)
+#endif
 [[nodiscard]] inline AeroBalance balance(const AeroConfig& c, double wheelbase_m) {
     AeroBalance b;
     const double sum = c.CLF + c.CLR;
@@ -86,6 +103,9 @@ struct AeroBalance {
     b.x_cp_aft_of_front_axle_m = wheelbase_m * c.CLR / sum;
     return b;
 }
+#if defined(_MSC_VER)
+#  pragma warning(pop)
+#endif
 
 }  // namespace rcvd::aero
 

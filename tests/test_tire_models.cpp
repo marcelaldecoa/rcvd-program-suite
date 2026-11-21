@@ -229,7 +229,7 @@ TEST_CASE("TV-5: Magic Formula fit of the normalised curve of dataset B",
     REQUIRE_THAT(c.evaluate(0.996), WithinRel(0.786, 2e-2));
 }
 
-TEST_CASE("§5.2: the MF sign check runs in both directions", "[tire][L5][validation]") {
+TEST_CASE("5.2: the MF sign check runs in both directions", "[tire][L5][validation]") {
     // A dimensional block must have B*C*D < 0 (D is the peak lateral force in the
     // SAE tire frame, hence negative); a normalised one must have B*C*D > 0.
     MagicFormulaConfig dim;
@@ -290,7 +290,7 @@ TEST_CASE("L5: BCD is the cornering stiffness, and load interpolation is PCHIP",
 }
 
 // ------------------------------------------------------- §6.1 shared conformance
-TEST_CASE("L3, L4 and L5 all satisfy the §6.1 contract", "[tire][conformance]") {
+TEST_CASE("L3, L4 and L5 all satisfy the 6.1 contract", "[tire][conformance]") {
     // The point of a SHARED conformance test: a new model earns T1-T8 by
     // construction rather than by someone remembering to write its checks.
     const auto l3 = TableTire::create(table_fixture());
@@ -380,7 +380,7 @@ TEST_CASE("TV-6: the relaxation time constant is sigma/V", "[tire][relaxation]")
     REQUIRE(tau_ratio(0.5, 5.0, 0.1) >= 1.0);
 }
 
-TEST_CASE("§6.9: step and ramp responses, and the integrator agrees with them",
+TEST_CASE("6.9: step and ramp responses, and the integrator agrees with them",
           "[tire][relaxation]") {
     const double tau = 0.409;
     // 63.2 % at tau, 98.2 % at 4 tau.
@@ -417,7 +417,7 @@ TEST_CASE("§6.9: step and ramp responses, and the integrator agrees with them",
     REQUIRE_THAT(f.value(), WithinRel(0.632, 2e-3));
 }
 
-TEST_CASE("§6.9: the speed guard bypasses and re-initialises", "[tire][relaxation]") {
+TEST_CASE("6.9: the speed guard bypasses and re-initialises", "[tire][relaxation]") {
     // tau = sigma/u is singular at u = 0. Below the floor the filter is bypassed
     // AND the state re-initialised to Fy_ss, so no transient is injected when the
     // vehicle re-accelerates — a filter left holding a stale value would produce
@@ -440,7 +440,7 @@ TEST_CASE("§6.9: the speed guard bypasses and re-initialises", "[tire][relaxati
     REQUIRE_THAT(f.step(-500.0, 30.0, 0.05), WithinRel(-500.0, 1e-12));
 }
 
-TEST_CASE("§6.9: disabled by default", "[tire][relaxation]") {
+TEST_CASE("6.9: disabled by default", "[tire][relaxation]") {
     // The default SHALL be disabled for every program; P2/P4/P5 make it
     // user-selectable.
     RelaxationFilter f;

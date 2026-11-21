@@ -64,7 +64,7 @@ TEST_CASE("JSON rejects malformed documents", "[io][json]") {
     REQUIRE_FALSE(parse_json("{\"x\": Infinity}").ok());
 }
 
-TEST_CASE("JSON accepts the comments the §5 examples use", "[io][json]") {
+TEST_CASE("JSON accepts the comments the 5 examples use", "[io][json]") {
     const char* text = R"JSON({
         // a line comment, as in the §5.1 example
         "schema_version": "1.0",   /* and a block one */
@@ -76,7 +76,7 @@ TEST_CASE("JSON accepts the comments the §5 examples use", "[io][json]") {
 }
 
 // ------------------------------------------------------------------ §5 schema
-TEST_CASE("§5: major schema-version mismatch is rejected", "[io][document]") {
+TEST_CASE("5: major schema-version mismatch is rejected", "[io][document]") {
     const auto make = [](const char* ver) {
         return parse_json(std::string(R"JSON({"schema_version": ")JSON") + ver +
                           R"JSON(", "inertia": {}, "geometry": {}})JSON")
@@ -90,7 +90,7 @@ TEST_CASE("§5: major schema-version mismatch is rejected", "[io][document]") {
     REQUIRE(check_schema_version(parse_json("{}").value(), "doc").has_value());
 }
 
-TEST_CASE("§5.2: a dimensional coefficient without a unit is rejected", "[io][document]") {
+TEST_CASE("5.2: a dimensional coefficient without a unit is rejected", "[io][document]") {
     // This is the rule that stops the source's English-unit expressions being read
     // as SI — a factor of 57 in c0, 13 in c1 and 4.4 in mu1.
     const auto bare = parse_json(R"JSON({"c0": -0.4})JSON").value();
@@ -111,7 +111,7 @@ TEST_CASE("§5.2: a dimensional coefficient without a unit is rejected", "[io][d
     REQUIRE_FALSE(quantity(wrong, "c0", units::Dim::PerAngle, "tire").ok());
 }
 
-TEST_CASE("§5.1: a vehicle document loads and converts", "[io][document]") {
+TEST_CASE("5.1: a vehicle document loads and converts", "[io][document]") {
     const char* text = R"JSON({
       "schema_version": "1.0",
       "name": "CH5",
@@ -148,7 +148,7 @@ TEST_CASE("§5.1: a vehicle document loads and converts", "[io][document]") {
     REQUIRE_THAT(v.value().a_s / units::INCH, WithinRel(43.466, 1e-4));
 }
 
-TEST_CASE("§5.1: over-specification is rejected at the document layer",
+TEST_CASE("5.1: over-specification is rejected at the document layer",
           "[io][document][validation]") {
     // Both mass and weight.
     const auto both = parse_json(R"JSON({
@@ -183,7 +183,7 @@ TEST_CASE("§5.1: over-specification is rejected at the document layer",
     REQUIRE(r.error().code == "E-VEH-010");
 }
 
-TEST_CASE("§5.2: a tire document loads, and the redundancy rules hold",
+TEST_CASE("5.2: a tire document loads, and the redundancy rules hold",
           "[io][document][validation]") {
     // The §5.2 example as CORRECTED in this repo's spec commit: one source of
     // cornering stiffness, and no friction block on a pure-stiffness model.
@@ -237,7 +237,7 @@ TEST_CASE("§5.2: a tire document loads, and the redundancy rules hold",
 }
 
 // ------------------------------------------------------------------ §15.1 CSV
-TEST_CASE("§15.1: CSV headers carry units and values round-trip losslessly",
+TEST_CASE("15.1: CSV headers carry units and values round-trip losslessly",
           "[io][csv]") {
     Channel t{"time", "s", units::Dim::Time, {0.0, 0.01, 0.02}};
     Channel ay{"A_Y", "g", units::Dim::Acceleration,
@@ -263,7 +263,7 @@ TEST_CASE("§15.1: CSV headers carry units and values round-trip losslessly",
             4448.2216152605 / units::POUND_FORCE);
 }
 
-TEST_CASE("§15.1: CSV rejects a display unit outside the vocabulary", "[io][csv]") {
+TEST_CASE("15.1: CSV rejects a display unit outside the vocabulary", "[io][csv]") {
     Channel bad{"A_Y", "furlongs_per_fortnight", units::Dim::Acceleration, {1.0}};
     REQUIRE_FALSE(write_csv({bad}).ok());
     // ...and a dimension mismatch, which is the same class of error.
@@ -282,7 +282,7 @@ TEST_CASE("RFC 4180 escaping", "[io][csv]") {
 }
 
 // --------------------------------------------------------------- §4.5 manifest
-TEST_CASE("§4.5: the manifest records the resolved SI input", "[io][manifest]") {
+TEST_CASE("4.5: the manifest records the resolved SI input", "[io][manifest]") {
     const auto v = core::resolve(fixtures::ch5_input());
     REQUIRE(v.ok());
 

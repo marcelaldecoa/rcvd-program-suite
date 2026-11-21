@@ -152,7 +152,7 @@ TEST_CASE("L2 returns the one-sided slope from below at the kink", "[tire][L2]")
 }
 
 // ------------------------------------------------------- the shared T1-T8 suite
-TEST_CASE("L1 and L2 satisfy the §6.1 contract", "[tire][conformance]") {
+TEST_CASE("L1 and L2 satisfy the 6.1 contract", "[tire][conformance]") {
     LinearTireConfig l1;
     l1.id = "linear";
     l1.C_alpha_N_per_rad = -640.0 * kLbfDeg;
@@ -201,7 +201,7 @@ TEST_CASE("B-13: CH5 skidpad limit through the tire model", "[tire][acceptance]"
     REQUIRE_THAT(Fy_lbf / (3700.0 * 0.57), WithinRel(1.5173, 1e-4));
 }
 
-TEST_CASE("§17.6 case a: MMM construction lines", "[tire][acceptance]") {
+TEST_CASE("17.6 case a: MMM construction lines", "[tire][acceptance]") {
     // 60-slug vehicle, l = 10 ft, a = b = 5 ft, C = 420 lbf/deg, alpha_bk = 6 deg.
     LinearTireConfig c;
     c.id = "mmm";

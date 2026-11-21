@@ -113,7 +113,7 @@ TEST_CASE("X-01: a fixed steer settles onto a circle", "[transient][acceptance]"
 }
 
 // ---------------------------------------------------------------- X-02
-TEST_CASE("X-02: the §8.7 axis convention mirrors a right-hand turn",
+TEST_CASE("X-02: the 8.7 axis convention mirrors a right-hand turn",
           "[transient][acceptance]") {
     // "In the SAE frame Y_E points 90 deg clockwise from X_E. Plotting X_E on the
     // horizontal axis and Y_E on the vertical axis mirrors the path, so a
@@ -530,7 +530,7 @@ TEST_CASE("X-13: an oversteering car diverges and EV-SPIN is reachable",
 }
 
 // ---------------------------------------------------------------- §13.3 checks
-TEST_CASE("§13.3: the limiting mode is named, and relaxation usually binds",
+TEST_CASE("13.3: the limiting mode is named, and relaxation usually binds",
           "[transient][numerics]") {
     numerics::StepInputs in;
     in.dt_s = 1e-3;

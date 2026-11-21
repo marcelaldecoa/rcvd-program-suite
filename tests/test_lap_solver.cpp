@@ -68,7 +68,7 @@ DriverPlan plan_at(double radius_ft, double steer_rad, double speed_mps) {
 }  // namespace
 
 // ---------------------------------------------------------------- §11.4 lap timing
-TEST_CASE("§11.4: a lap completes and the time is not step-quantised",
+TEST_CASE("11.4: a lap completes and the time is not step-quantised",
           "[lap][acceptance]") {
     const core::Vehicle v = speedway_vehicle();
     const auto C = fixtures::ch5_tires();
@@ -159,7 +159,7 @@ TEST_CASE("S-04: lap time converges under step refinement", "[lap][acceptance]")
 }
 
 // ------------------------------------------------------------ §11.5 / §11.6 events
-TEST_CASE("§11.6 / S-01: the theoretical optimum hits the inner wall",
+TEST_CASE("11.6 / S-01: the theoretical optimum hits the inner wall",
           "[lap][acceptance]") {
     // "This solution crashes into the inner wall." At t = 0 the yaw rate and
     // lateral velocity are zero, so the vehicle needs a transient before it
@@ -217,7 +217,7 @@ TEST_CASE("§11.6 / S-01: the theoretical optimum hits the inner wall",
     REQUIRE(fixed.value().event == LapEvent::lap);
 }
 
-TEST_CASE("§11.6: too much steer is not attributed to the transient", "[lap][validation]") {
+TEST_CASE("11.6: too much steer is not attributed to the transient", "[lap][validation]") {
     // The discriminator the attribution test exists for: when the implied
     // steady-state radius is INSIDE the wall, the vehicle would have hit it even
     // fully settled, so the contact is not the transient's doing and gets no hint.
@@ -242,7 +242,7 @@ TEST_CASE("§11.6: too much steer is not attributed to the transient", "[lap][va
     REQUIRE(res.value().diagnostics.empty());   // no H-SPD-001
 }
 
-TEST_CASE("§11.5: outer-wall departure is detected and refined", "[lap][validation]") {
+TEST_CASE("11.5: outer-wall departure is detected and refined", "[lap][validation]") {
     const core::Vehicle v = speedway_vehicle();
     const auto C = fixtures::ch5_tires();
     const double V = 40.0 * FT;
@@ -275,7 +275,7 @@ TEST_CASE("EV-TIMEOUT when no lap is completed", "[lap][validation]") {
     REQUIRE(res.value().diagnostics.front().code == "EV-TIMEOUT");
 }
 
-TEST_CASE("§11.4: the event is located on the bracketing step, not after it",
+TEST_CASE("11.4: the event is located on the bracketing step, not after it",
           "[lap][regression]") {
     // The defect §11.4 exists to prevent: reporting the first step at which the
     // condition holds. With a deliberately coarse step the refined time must still
@@ -364,7 +364,7 @@ TEST_CASE("A2: repeated runs are bit-identical, and recording changes nothing",
     }
 }
 
-TEST_CASE("§15.1: records come from dense output at the requested rate", "[lap]") {
+TEST_CASE("15.1: records come from dense output at the requested rate", "[lap]") {
     const core::Vehicle v = speedway_vehicle();
     const auto C = fixtures::ch5_tires();
     const double V = 40.0 * FT;

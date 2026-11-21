@@ -109,7 +109,7 @@ TEST_CASE("C ABI: a bad document reports the same diagnostic the core does",
 }
 
 // -------------------------------------------------------------------- §18.3
-TEST_CASE("§18.3: the C API and the C++ API agree bit-for-bit", "[capi][crosscheck]") {
+TEST_CASE("18.3: the C API and the C++ API agree bit-for-bit", "[capi][crosscheck]") {
     Handle h;
     REQUIRE(rcvd_vehicle_load_json(kCh5Json, &h.p) == RCVD_OK);
 
@@ -185,7 +185,7 @@ TEST_CASE("§18.3: the C API and the C++ API agree bit-for-bit", "[capi][crossch
     REQUIRE(ch.V_ch == pm.V_ch.value_or(0.0));
 }
 
-TEST_CASE("§18.3: the B-vectors reproduce through the C API", "[capi][acceptance]") {
+TEST_CASE("18.3: the B-vectors reproduce through the C API", "[capi][acceptance]") {
     Handle h;
     REQUIRE(rcvd_vehicle_load_json(kCh5Json, &h.p) == RCVD_OK);
 
@@ -215,7 +215,7 @@ TEST_CASE("§18.3: the B-vectors reproduce through the C API", "[capi][acceptanc
     REQUIRE_THAT(m.SM, WithinRel(0.04541, 1e-4));
 }
 
-TEST_CASE("§18.3: P6 agrees bit-for-bit, and I-5 holds through C", "[capi][crosscheck]") {
+TEST_CASE("18.3: P6 agrees bit-for-bit, and I-5 holds through C", "[capi][crosscheck]") {
     const double LBF_IN = units::LBF_PER_IN_TO_N_PER_M;
     const double LBF_FT_DEG = units::LBF_FT_PER_DEG_TO_NM_PER_RAD;
 
@@ -267,7 +267,7 @@ TEST_CASE("§18.3: P6 agrees bit-for-bit, and I-5 holds through C", "[capi][cros
     REQUIRE(std::string(rcvd_last_error_code()) == "E-RR-020");
 }
 
-TEST_CASE("§18.3: the lap solver agrees bit-for-bit", "[capi][crosscheck]") {
+TEST_CASE("18.3: the lap solver agrees bit-for-bit", "[capi][crosscheck]") {
     Handle h;
     REQUIRE(rcvd_vehicle_load_json(kCh5Json, &h.p) == RCVD_OK);
 
