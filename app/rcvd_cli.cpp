@@ -45,6 +45,10 @@ void usage() {
         "  --units si|us    DISPLAY system only; the core always computes in SI\n"
         "                   (Rule U1). Default si.\n"
         "  --in-units U     unit for the numeric options above, e.g. ft, mph, deg\n"
+        "  --digits N       significant figures, 1..17 (default 6). §18.3 requires the\n"
+        "                   GUI, the CLI and the C API to agree BIT-FOR-BIT; at the\n"
+        "                   default 6 figures that cannot be checked from this\n"
+        "                   output, so --digits 17 round-trips a binary64 exactly.\n"
         "  --manifest FILE  write the §4.5 run manifest here\n"
         "  --csv FILE       write the trajectory as CSV (lap only)\n"
         "\n"
@@ -59,6 +63,7 @@ struct Args {
     double cf = 0, cr = 0, speed = 0, steer = 0;
     double inner = 0, outer = 0, start = 0;
     bool have_outer = false, have_start = false;
+    int digits = 6;
 };
 
 bool read_file(const std::string& path, std::string& out) {
@@ -100,6 +105,7 @@ int main(int argc, char** argv) {
         else if (k == "--inner")    a.inner = std::stod(next());
         else if (k == "--outer")  { a.outer = std::stod(next()); a.have_outer = true; }
         else if (k == "--start")  { a.start = std::stod(next()); a.have_start = true; }
+        else if (k == "--digits")   a.digits = std::stoi(next());
         else if (k == "--units" || k == "--in-units") {
             const auto s = io::parse_unit_system(next());
             if (!s) { std::cerr << "unknown unit system\n"; return 1; }
@@ -110,6 +116,10 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (a.digits < 1 || a.digits > 17) {
+        std::cerr << "--digits must be in 1..17 (17 round-trips a binary64 exactly)\n";
+        return 1;
+    }
     if (a.vehicle_file.empty()) {
         std::cerr << "--vehicle is required\n";
         return 1;
@@ -135,6 +145,9 @@ int main(int argc, char** argv) {
     const double V = to_si_in(a.speed, units::Dim::Speed, a.in_units);
     const double delta = to_si_in(a.steer, units::Dim::Angle, a.in_units);
 
+    // Width follows precision so that --digits 17 still produces aligned columns.
+    const int w = a.digits + 8;
+
     const io::DisplayUnits disp = io::DisplayUnits::of(a.units);
     const auto show = [&](double si, units::Dim dim) {
         return *io::to_display(si, dim, disp);
@@ -148,30 +161,32 @@ int main(int argc, char** argv) {
         const auto d = models::stability_derivatives(veh, C, V);
         // §8.3's six derivatives span four dimensions; each is displayed through
         // the unit its own dimension resolves to, never a shared divisor.
-        std::printf("  Y_beta   %14.6g  %s\n", show(d.Y_beta, units::Dim::CorneringStiffness),
+        std::printf("  Y_beta   %*.*g  %s\n", w, a.digits, show(d.Y_beta, units::Dim::CorneringStiffness),
                     unit(units::Dim::CorneringStiffness).c_str());
-        std::printf("  Y_delta  %14.6g  %s\n", show(d.Y_delta, units::Dim::CorneringStiffness),
+        std::printf("  Y_delta  %*.*g  %s\n", w, a.digits, show(d.Y_delta, units::Dim::CorneringStiffness),
                     unit(units::Dim::CorneringStiffness).c_str());
-        std::printf("  N_beta   %14.6g  %s\n", show(d.N_beta, units::Dim::AngularStiffness),
+        std::printf("  N_beta   %*.*g  %s\n", w, a.digits, show(d.N_beta, units::Dim::AngularStiffness),
                     unit(units::Dim::AngularStiffness).c_str());
-        std::printf("  N_delta  %14.6g  %s\n", show(d.N_delta, units::Dim::AngularStiffness),
+        std::printf("  N_delta  %*.*g  %s\n", w, a.digits, show(d.N_delta, units::Dim::AngularStiffness),
                     unit(units::Dim::AngularStiffness).c_str());
         // Y_r (N*s/rad) and N_r (N*m*s/rad) are their OWN dimensions, not the
         // stiffnesses they are so often displayed with. Each resolves its own unit,
         // which is what makes B-04 and B-07 expressible in US format at all.
-        std::printf("  Y_r      %14.6g  %s\n", show(d.Y_r, units::Dim::SideForceDamping),
+        std::printf("  Y_r      %*.*g  %s\n", w, a.digits, show(d.Y_r, units::Dim::SideForceDamping),
                     unit(units::Dim::SideForceDamping).c_str());
-        std::printf("  N_r      %14.6g  %s\n", show(d.N_r, units::Dim::YawDamping),
+        std::printf("  N_r      %*.*g  %s\n", w, a.digits, show(d.N_r, units::Dim::YawDamping),
                     unit(units::Dim::YawDamping).c_str());
         const auto m = models::handling_metrics(veh, C);
-        std::printf("  K_us     %14.6g  deg/g\n", m.K * veh.l * veh.g / units::DEGREE);
-        std::printf("  NSP      %14.6g  -\n", m.NSP);
-        std::printf("  SM       %14.6g  -\n", m.SM);
-        if (m.V_ch)   std::printf("  V_ch     %14.6g  %s\n",
+        // Rule A1: the deg/g normalisation is a core function, not arithmetic here.
+        std::printf("  K_us     %*.*g  deg/g\n", w, a.digits,
+                    models::understeer_gradient_deg_per_g(veh, m));
+        std::printf("  NSP      %*.*g  -\n", w, a.digits, m.NSP);
+        std::printf("  SM       %*.*g  -\n", w, a.digits, m.SM);
+        if (m.V_ch)   std::printf("  V_ch     %*.*g  %s\n", w, a.digits,
                                   show(*m.V_ch, units::Dim::Speed), unit(units::Dim::Speed).c_str());
-        if (m.V_crit) std::printf("  V_crit   %14.6g  %s\n",
+        if (m.V_crit) std::printf("  V_crit   %*.*g  %s\n", w, a.digits,
                                   show(*m.V_crit, units::Dim::Speed), unit(units::Dim::Speed).c_str());
-        std::printf("  V_tan    %14.6g  %s\n", show(m.V_tan, units::Dim::Speed),
+        std::printf("  V_tan    %*.*g  %s\n", w, a.digits, show(m.V_tan, units::Dim::Speed),
                     unit(units::Dim::Speed).c_str());
         return 0;
     }
@@ -179,19 +194,19 @@ int main(int argc, char** argv) {
     if (a.command == "steady") {
         const auto ss = models::steady_state(veh, C, V, delta);
         if (!ss.ok()) return fail(ss.error());
-        std::printf("  speed    %14.6g  %s\n", show(V, units::Dim::Speed),
+        std::printf("  speed    %*.*g  %s\n", w, a.digits, show(V, units::Dim::Speed),
                     unit(units::Dim::Speed).c_str());
-        std::printf("  steer    %14.6g  %s\n", show(delta, units::Dim::Angle),
+        std::printf("  steer    %*.*g  %s\n", w, a.digits, show(delta, units::Dim::Angle),
                     unit(units::Dim::Angle).c_str());
-        std::printf("  beta     %14.6g  %s\n", show(ss.value().beta_rad, units::Dim::Angle),
+        std::printf("  beta     %*.*g  %s\n", w, a.digits, show(ss.value().beta_rad, units::Dim::Angle),
                     unit(units::Dim::Angle).c_str());
-        std::printf("  yaw rate %14.6g  %s/s\n",
+        std::printf("  yaw rate %*.*g  %s/s\n", w, a.digits,
                     ss.value().r_rad_per_s / (a.units == io::UnitSystem::us ? units::DEGREE : 1.0),
                     unit(units::Dim::Angle).c_str());
-        std::printf("  A_Y      %14.6g  %s\n",
+        std::printf("  A_Y      %*.*g  %s\n", w, a.digits,
                     show(ss.value().A_Y_mps2, units::Dim::Acceleration),
                     unit(units::Dim::Acceleration).c_str());
-        std::printf("  rcond    %14.6g  -\n", ss.value().rcond);
+        std::printf("  rcond    %*.*g  -\n", w, a.digits, ss.value().rcond);
         return 0;
     }
 
@@ -225,7 +240,10 @@ int main(int argc, char** argv) {
         if (!res.ok()) return fail(res.error());
 
         std::printf("  event    %14s\n", analysis::to_string(res.value().event).c_str());
-        std::printf("  time     %14.9g  s\n", res.value().time_s);
+        // Lap time followed --digits like everything else once §18.3 had to be
+        // checkable: a 9-figure lap time cannot demonstrate bit-for-bit agreement
+        // either, and the event-location tolerance of §11.4 is 1e-9 s.
+        std::printf("  time     %*.*g  s\n", w, std::max(a.digits, 9), res.value().time_s);
         std::printf("  steps    %14ld accepted, %ld rejected\n", res.value().stats.accepted,
                     res.value().stats.rejected);
         for (const auto& d : res.value().diagnostics) {

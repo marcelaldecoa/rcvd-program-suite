@@ -245,7 +245,12 @@ enum class LimitCharacter { terminal_spin, terminal_drift, terminal_plow };
 
 struct MmmMetrics {
     double stability_index = 0.0;        // (10.6) dC_N/dA_Y_bar on the trim line
-    double stability_index_linear = 0.0; // (10.7) analytic linear-range value
+    // (10.7)'s analytic linear-range value is NOT a member: metrics() works from a
+    // TireModel and cannot recover an axle cornering stiffness from it, so a field
+    // here could only ever read back as zero. A caller comparing (10.6) against a
+    // silent zero would conclude the cross-check had passed. Call
+    // stability_index_linear(vehicle, C_F_axle, C_R_axle) with the stiffnesses you
+    // supplied instead.
     double control_moment = 0.0;         // dC_N/ddelta at constant beta
     // §10.5: "the largest |A_Y_bar| on the trim line", so this is a MAGNITUDE and
     // is never negative. The (beta, delta) at which it occurs carry the direction;

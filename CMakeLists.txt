@@ -111,6 +111,33 @@ add_executable(rcvd-cli app/rcvd_cli.cpp)
 target_link_libraries(rcvd-cli PRIVATE
   rcvd::core rcvd::models rcvd::analysis rcvd::io rcvd::tire rcvd::aero rcvd_flags)
 
+# §4.1 / §16: the Qt Widgets front end. Optional, because the suite must build and
+# test with no GUI toolkit present — §18 gates nothing on it, and CI machines that
+# have no Qt still have to go green.
+option(RCVD_BUILD_GUI "Build the Qt Widgets GUI (§16)" ON)
+if(RCVD_BUILD_GUI)
+  find_package(Qt6 6.5 QUIET COMPONENTS Widgets)
+  if(Qt6_FOUND)
+    set(CMAKE_AUTOMOC ON)   # the Q_OBJECT widgets are header-only
+    # Headers are listed as sources so AUTOMOC sees their Q_OBJECT.
+    add_executable(rcvd-gui WIN32
+      app/gui/main.cpp
+      app/gui/unit_field.hpp
+      app/gui/plot_widget.hpp
+      app/gui/program_spec.hpp
+      app/gui/program_window.hpp
+      app/gui/launcher.hpp)
+    target_include_directories(rcvd-gui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/app/gui)
+    target_link_libraries(rcvd-gui PRIVATE
+      Qt6::Widgets
+      rcvd::core rcvd::models rcvd::analysis rcvd::io rcvd::tire rcvd::aero rcvd_flags)
+    message(STATUS "rcvd-gui: Qt ${Qt6_VERSION} at ${Qt6_DIR}")
+  else()
+    message(STATUS "rcvd-gui: Qt6 Widgets not found; skipping the GUI target. "
+                   "Pass -DCMAKE_PREFIX_PATH=<Qt>/msvc2022_64 to build it.")
+  endif()
+endif()
+
 if(RCVD_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)

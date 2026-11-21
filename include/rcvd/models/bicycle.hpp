@@ -178,6 +178,20 @@ struct HandlingMetrics {
     return m;
 }
 
+// (8.18) in the form handling work is actually quoted in: degrees of steer per g
+// of lateral acceleration.
+//
+// This deliberately does NOT live in `units`. Rule U4 forbids treating g as a
+// unit, and the divisor here is the VEHICLE's own gravity field (§5.4), not a
+// fixed constant — so it is a normalisation, not a unit conversion, and
+// units::from_si must never be able to perform it. Rule A1 then forbids a front
+// end from doing the arithmetic inline, which is why it is a core function that
+// the CLI, the GUI and the C API all call.
+[[nodiscard]] inline double understeer_gradient_deg_per_g(const core::Vehicle& veh,
+                                                          const HandlingMetrics& m) {
+    return m.K_us * veh.g / units::DEGREE;
+}
+
 // (8.15) yaw-rate gain via the stability factor.
 [[nodiscard]] inline double yaw_rate_gain(const core::Vehicle& veh, double K, double V_mps) {
     return (V_mps / veh.l) / (1.0 + K * V_mps * V_mps);

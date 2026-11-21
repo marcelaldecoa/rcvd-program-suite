@@ -24,11 +24,12 @@ Following the build order of spec Appendix C:
 | 8 | `analysis::ride_roll` → R-01 … R-14, I-5 | **done** — plus C-04 |
 | 9 | `analysis::lap_solve` + event location → S-01 … S-05 | **done** — plus C-03 |
 | 10 | `io`, `capi`, `rcvd-cli` | **done** |
-| 11 | `app` (GUI) + §18.3 interface-equivalence gate | not started — the C++/C half of §18.3 is closed; the GUI half needs Qt |
+| 11 | `app` (GUI) + §18.3 interface-equivalence gate | **done** — six windows on Qt 6.8.3; §18.3 closed in both halves |
 
 Both hard gates are passed: B-01 … B-31 (step 5) and I-3/I-3b/I-3c + C-02
-(step 6). **All five cross-checks C-01 … C-05 hold**, and the behavioural
-vectors X-01 … X-13 pass. Only step 11 remains, and it needs Qt.
+(step 6). **All five cross-checks C-01 … C-05 hold**, the behavioural vectors
+X-01 … X-13 pass, and all eleven Appendix C stages are built. 196 of 196 ctest
+cases pass.
 
 ## Testing
 
@@ -89,10 +90,8 @@ case in its own process, under CMake 4.4.4 and MSVC 19.44 at RelWithDebInfo.
 ## Running the CLI
 
 ```powershell
-pwsh tools/build_cli.ps1        # produces .
-cvd-cli.exe
-.
-cvd-cli.exe --help
+pwsh tools/build_cli.ps1        # produces .\rcvd-cli.exe
+.\rcvd-cli.exe --help
 ```
 
 `rcvd-cli` is a single translation unit — everything it needs is header-only —
@@ -102,18 +101,15 @@ Three commands, all taking a §5.1 vehicle document:
 
 ```powershell
 # stability derivatives and handling metrics (B-03 ... B-08, B-10, B-11, B-26)
-.
-cvd-cli.exe derivs --vehicle examples/ch5.json --units us --in-units us `
+.\rcvd-cli.exe derivs --vehicle examples/ch5.json --units us --in-units us `
                 --cf -640 --cr -580 --speed 30
 
 # steady-state response at a given steer angle
-.
-cvd-cli.exe steady --vehicle examples/ch5.json --units us --in-units us `
+.\rcvd-cli.exe steady --vehicle examples/ch5.json --units us --in-units us `
                 --cf -640 --cr -580 --speed 30 --steer 3
 
 # a lap of a circular circuit, optionally writing the path and a run manifest
-.
-cvd-cli.exe lap --vehicle examples/ch5.json --units us --in-units us `
+.\rcvd-cli.exe lap --vehicle examples/ch5.json --units us --in-units us `
                 --cf -640 --cr -580 --speed 27.3 --steer 3.99 `
                 --inner 100 --outer 400 --start 150 `
                 --csv path.csv --manifest run.json
@@ -124,21 +120,79 @@ and vice versa. Cornering stiffnesses are **axle** values and must be negative
 (§3.3). Everything between the two unit boundaries is SI (Rule U1), which is why
 the lap time is identical to all printed digits whichever display system you pick.
 
+`--digits N` sets the significant figures, 1 to 17, default 6. Use 17 when you
+need to compare front ends: §18.3 demands bit-for-bit agreement, and six figures
+cannot demonstrate it. Seventeen round-trips a binary64 exactly.
+
 ## Running the GUI
 
-**There is no GUI yet.** Spec §16 calls for Qt 6 Widgets and it is Appendix C
-step 11 — the one stage not yet built, because Qt is not installed on this
-machine and GUI code that cannot be compiled or run is worse than none.
+`rcvd-gui` is Qt 6 Widgets (§16): a launcher shell plus one window per program,
+each with the Define / Run / Results / Diagnostics tabs §16.1 requires.
 
-When it is built, Rule A1 (§4.1) constrains what it may contain: no equation, no
-unit conversion beyond calling `io/display`, and no numerical algorithm. Every
-GUI action must map to an `rcvd-cli` invocation, and §16.2 requires the window to
-be able to display the equivalent CLI command for its current configuration.
-Until then, `rcvd-cli` reaches everything the GUI would.
+```powershell
+pwsh tools\build_gui.ps1 -Run
+```
 
-Note that this also leaves the last third of §18.3 open: the GUI, CLI and C API
-must agree bit-for-bit, and only the C++/C half of that is currently closed
-(`tests/test_capi.cpp`).
+The script finds Qt under `C:\Qt` and builds through CMake — unlike `rcvd-cli`,
+the GUI cannot be built with a bare `cl` invocation, because its `Q_OBJECT`
+widgets need `moc`. If Qt is missing, the script prints the two commands that
+install just `qtbase` (about 260 MB, no account needed):
+
+```powershell
+pip install aqtinstall
+python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 --archives qtbase --outputdir C:\Qt
+```
+
+Other entry points, all of which open no window:
+
+| command | what it does |
+|---|---|
+| `rcvd-gui P3` | skip the shell, open one program directly |
+| `rcvd-gui --selftest [P#]` | every result at 17 significant figures |
+| `rcvd-gui --dump-vehicle P1` | the §5.1 document the Define tab would save |
+| `rcvd-gui --dump-cli P1 <doc>` | the command line the Run tab displays |
+| `rcvd-gui --render P1 out.png [tab]` | rasterise a window to PNG |
+
+`rcvd-gui` is a WIN32-subsystem binary, so it has no console of its own: to see
+the output of those modes, redirect it (`cmd /c "rcvd-gui --selftest > out.txt"`)
+or use `pwsh tools\build_gui.ps1 -Selftest`.
+
+### What Rule A1 means here
+
+§4.1 forbids `app` from containing any equation, any unit conversion beyond
+calling `units`, and any numerical algorithm. The GUI obeys that structurally
+rather than by inspection:
+
+* `app/gui/program_spec.hpp` describes each program as a field list plus a run
+  function that is a sequence of calls into `models`, `analysis` and `tire`.
+  There is no arithmetic on a physical quantity anywhere in `app/gui`.
+* The Define tab does not hand its values to `core::resolve`. It writes a real
+  §5.1 vehicle document and feeds it through `io::load_vehicle` — the same
+  function `rcvd-cli` calls on a file — so both front ends share one input path.
+* Quantities with no entry in §3.4's closed vocabulary (the stability factor K,
+  the MMM indices, `rcond`) are labelled verbatim and never converted, so nothing
+  in the GUI can masquerade as a unit conversion.
+* The deg/g form of the understeer gradient is a core function
+  (`models::understeer_gradient_deg_per_g`), not a conversion, because Rule U4
+  makes g a field constant rather than a unit.
+
+### §18.3 is closed in both halves
+
+> "Any behaviour reachable through the GUI SHALL be reachable through `rcvd-cli`
+> and through the C API with identical results, bit-for-bit."
+
+`tests/test_capi.cpp` closes the C++/C half. `tools/check_front_ends.py` closes
+the GUI/CLI half, and runs as the ctest case `front_ends_agree_bit_for_bit`
+whenever the GUI was built. It retypes no number: the GUI emits the vehicle
+document, emits its own equivalent command line, runs it through `rcvd-cli
+--digits 17`, and the two sets of digits are compared as strings. Seventeen
+significant figures round-trip a binary64 exactly, so string equality there is
+bit equality.
+
+That gate earned its keep on its first run, by catching the Run tab emitting
+`--start 0` for a field whose zero means "default": `rcvd-cli` reads a supplied
+zero literally, which puts the car inside the inner wall, so the displayed
+command did not reproduce the GUI's own run.
 
 ## Building
 

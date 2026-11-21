@@ -48,4 +48,19 @@ if(Python3_FOUND)
                    --compiler ${CMAKE_CXX_COMPILER}
                    --include  ${CMAKE_CURRENT_SOURCE_DIR}/../include
                    --dir      ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail)
+
+  # §18.3 requires the GUI, the CLI and the C API to agree bit-for-bit. The
+  # C++/C half is tests/test_capi.cpp; the GUI half cannot live inside the
+  # Catch2 suite, because the GUI links Qt and must be driven as a process.
+  # Registered only when the GUI was built, so a Qt-less CI run still goes green.
+  if(TARGET rcvd-gui)
+    add_test(NAME front_ends_agree_bit_for_bit
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_front_ends.py
+                     $<TARGET_FILE:rcvd-gui> $<TARGET_FILE:rcvd-cli>)
+    # The GUI runs headless here (--selftest opens no window), but it still needs
+    # the Qt DLLs beside it or on PATH.
+    set_tests_properties(front_ends_agree_bit_for_bit PROPERTIES
+                         ENVIRONMENT "PATH=$<SHELL_PATH:${QT6_INSTALL_PREFIX}/bin>;$ENV{PATH}")
+  endif()
 endif()

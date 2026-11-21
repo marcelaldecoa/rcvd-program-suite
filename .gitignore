@@ -10,3 +10,10 @@ rcvd-cli.exe
 # also hide real tire-table fixtures, and 15.1 makes CSV a first-class output.
 /path.csv
 /run.json
+
+# CMake build trees. tools/build_gui.ps1 defaults to build-gui/.
+build-gui/
+build-*/
+
+# aqtinstall's log, written into the working directory when Qt is installed.
+aqtinstall.log
