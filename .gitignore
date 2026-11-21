@@ -5,3 +5,8 @@ out/
 *.pdb
 *.ilk
 rcvd-cli.exe
+
+# rcvd-cli demo output at the repo root. Root-anchored on purpose: *.csv would
+# also hide real tire-table fixtures, and 15.1 makes CSV a first-class output.
+/path.csv
+/run.json
