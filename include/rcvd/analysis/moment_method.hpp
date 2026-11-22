@@ -258,6 +258,31 @@ struct MmmMetrics {
     // directions give the same magnitude.
     double max_trimmed_A_Y_bar = 0.0;
     double max_trimmed_beta = 0.0, max_trimmed_delta = 0.0;
+    // A saturating tire model makes the maximum FLAT in delta rather than a
+    // single point. With L2, once the front axle is past breakaway its force is
+    // constant, the trim condition a*Fy_F = b*Fy_R then fixes Fy_R and so beta
+    // independently of delta, and A_Y stops depending on delta altogether — the
+    // maximum is attained at EVERY delta past breakaway. These bound that
+    // plateau; lo == hi means the maximum is a genuine single point.
+    double max_trimmed_delta_lo = 0.0, max_trimmed_delta_hi = 0.0;
+    bool max_trimmed_is_plateau = false;
+
+    // How much of the steer sweep the trim line actually spans. trim_beta()
+    // searches beta within the sweep's own beta window, so a steer station with
+    // no trim solution in that window is dropped — and the trim line stops short
+    // of delta_max without saying so. The reported maximum is then a property of
+    // the BETA window, and widening that window is what moves it.
+    //
+    // This is easy to miss, because the truncated end need not sit exactly on the
+    // beta boundary: for CH5 with non-saturating tires the trim line requires
+    // beta = -4.968 * delta, so it dies at |delta| = 3.02 deg with beta at
+    // -15 deg, and the last surviving grid station reports beta = -14.9 deg,
+    // which no equality test against beta_max would catch.
+    int trim_points = 0;           // steer stations with a trim solution
+    int trim_points_requested = 0; // steer stations swept
+    [[nodiscard]] bool trim_line_truncated() const {
+        return trim_points < trim_points_requested;
+    }
     double limit_A_Y_bar = 0.0;          // the diagram's extreme |A_Y| point
     double limit_C_N = 0.0;
     LimitCharacter character = LimitCharacter::terminal_drift;
@@ -299,12 +324,72 @@ struct MmmMetrics {
 
     // Max trimmed lateral acceleration: the largest |A_Y_bar| on the trim line,
     // reported with the (beta, delta) at which it occurs.
-    for (const MmmPoint& p : mmm.trim_line()) {
-        if (std::abs(p.A_Y_bar) > m.max_trimmed_A_Y_bar) {
-            m.max_trimmed_A_Y_bar = std::abs(p.A_Y_bar);
-            m.max_trimmed_beta = p.beta_rad;
-            m.max_trimmed_delta = p.delta_rad;
+    //
+    // Two passes, not one. A single pass keeping the first strictly-greater point
+    // makes the reported steer angle an artefact of the sweep WINDOW whenever the
+    // maximum is flat: trim_line() walks delta upwards from delta_min, so the
+    // first point on a plateau is delta_min itself, and widening the sweep merely
+    // moves the answer to the new corner. (Verified for CH5 with L2 tires: the
+    // reported delta tracked the window edge at every half-width from 10 to 90
+    // degrees while A_Y_bar stayed at 1.517306780.)
+    //
+    // So: find the maximum first, then report the SMALLEST |delta| that attains
+    // it — the least steer that reaches maximum trimmed lateral acceleration,
+    // which is a property of the vehicle rather than of the window, and which
+    // lies in the interior whenever the plateau does.
+    const std::vector<MmmPoint> trim = mmm.trim_line();
+    m.trim_points = static_cast<int>(trim.size());
+    m.trim_points_requested = mmm.sweep().delta_n;
+    for (const MmmPoint& p : trim) {
+        m.max_trimmed_A_Y_bar = std::max(m.max_trimmed_A_Y_bar, std::abs(p.A_Y_bar));
+    }
+    if (m.max_trimmed_A_Y_bar > 0.0) {
+        // The tied values are equal in exact arithmetic but are formed by
+        // different sums, so they must be compared with a tolerance.
+        const double tol = 1e-12 * m.max_trimmed_A_Y_bar;
+        bool have = false;
+        for (const MmmPoint& p : trim) {
+            if (std::abs(p.A_Y_bar) < m.max_trimmed_A_Y_bar - tol) continue;
+            if (!have) {
+                m.max_trimmed_delta_lo = m.max_trimmed_delta_hi = p.delta_rad;
+                m.max_trimmed_delta = p.delta_rad;
+                m.max_trimmed_beta = p.beta_rad;
+                have = true;
+                continue;
+            }
+            m.max_trimmed_delta_lo = std::min(m.max_trimmed_delta_lo, p.delta_rad);
+            m.max_trimmed_delta_hi = std::max(m.max_trimmed_delta_hi, p.delta_rad);
+
+            // The trim line is ODD in delta, so +d and -d attain the maximum
+            // together and their |delta| are equal — but only in exact
+            // arithmetic. lerp() forms them as lo + (hi-lo)*i/(n-1), which
+            // rounds the two products differently, so the two magnitudes can
+            // differ by an ulp. A bare `<` then decides the reported sign on
+            // that ulp, and the answer flips with the sweep width for no
+            // physical reason. §13.1's no-bare-equality rule applies here as
+            // much as anywhere: compare with a tolerance, and break the
+            // remaining tie on a stated convention rather than on rounding.
+            const double d_p = std::abs(p.delta_rad);
+            const double d_best = std::abs(m.max_trimmed_delta);
+            const double d_tol = 1e-9 * std::max({1.0, d_p, d_best});
+            const bool closer = d_p < d_best - d_tol;
+            // Convention: among mirrored solutions report the positive steer,
+            // which pairs with a negative sideslip and a positive A_Y.
+            const bool mirrored_positive =
+                std::abs(d_p - d_best) <= d_tol && p.delta_rad > m.max_trimmed_delta;
+            if (closer || mirrored_positive) {
+                m.max_trimmed_delta = p.delta_rad;
+                m.max_trimmed_beta = p.beta_rad;
+            }
         }
+        // A plateau is a RANGE of delta, not two mirrored points: the trim line is
+        // odd in delta, so +d and -d both attain the maximum even when it is
+        // otherwise unique. Require more than two tied points before saying so.
+        int ties = 0;
+        for (const MmmPoint& p : trim) {
+            if (std::abs(p.A_Y_bar) >= m.max_trimmed_A_Y_bar - tol) ++ties;
+        }
+        m.max_trimmed_is_plateau = ties > 2;
     }
 
     // The diagram's extreme limit point, from the boundary walk.

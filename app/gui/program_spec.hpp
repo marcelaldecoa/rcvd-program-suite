@@ -535,21 +535,39 @@ inline RunOutput run_p3(const core::Vehicle& veh, const Inputs& in, const io::Di
     o.rows.push_back(raw_row("limit A_Y", met.limit_A_Y_bar, "g"));
     o.rows.push_back(raw_row("limit C_N", met.limit_C_N, "-"));
     o.rows.push_back(raw_row("trim-to-limit distance", met.trim_to_limit_distance, "-"));
-    // Rule D2 forbids silent extrapolation, and the same spirit applies to an
-    // extremum reported from a sweep: when the maximum trimmed point sits ON the
-    // edge of the (beta, delta) window it is the WINDOW's maximum, not the
-    // diagram's, and widening the sweep moves it. Say so, rather than let a
-    // boundary artefact be read as a property of the vehicle.
-    constexpr double kEdgeTol = 1e-9;
-    const bool on_delta_edge =
-        std::abs(std::abs(met.max_trimmed_delta) - sweep.delta_max) < kEdgeTol;
-    const bool on_beta_edge =
-        std::abs(std::abs(met.max_trimmed_beta) - sweep.beta_max) < kEdgeTol;
-    if (on_delta_edge || on_beta_edge) {
+
+    // Rule D2 forbids silent extrapolation, and the same spirit governs an
+    // extremum reported from a sweep. Two distinct things can go wrong, and they
+    // want opposite responses, so they are reported separately.
+    //
+    // (1) The maximum can be FLAT. A saturating tire model holds the front axle
+    //     force constant past breakaway, the trim condition then fixes beta
+    //     independently of delta, and every steer angle past breakaway attains
+    //     the same maximum. Widening the sweep does NOT help — the plateau runs
+    //     to the edge of any window — so the metric reports the least steer that
+    //     reaches it, and the span is shown here.
+    if (met.max_trimmed_is_plateau) {
+        o.rows.push_back(raw_row("max trimmed, plateau from",
+                                 *units::from_si(met.max_trimmed_delta_lo, "deg",
+                                                 units::Dim::Angle),
+                                 "deg", "the maximum is flat in steer, not a single point"));
+        o.rows.push_back(raw_row("max trimmed, plateau to",
+                                 *units::from_si(met.max_trimmed_delta_hi, "deg",
+                                                 units::Dim::Angle),
+                                 "deg", "widening the sweep only extends this span"));
+    }
+    // (2) The trim line can be CUT SHORT, when a steer station has no trim
+    //     solution inside the beta window. Here widening — the beta sweep — is
+    //     exactly the fix. The truncated end need not sit on the beta boundary,
+    //     so this is reported from the station count rather than from the
+    //     reported point's position.
+    if (met.trim_line_truncated()) {
         o.rows.push_back(text_row(
-            "sweep boundary", on_delta_edge ? "on the delta limit" : "on the beta limit",
-            "the max-trimmed point sits on the edge of the sweep window, so this is "
-            "the window's maximum and not the diagram's — widen the sweep"));
+            "trim line truncated",
+            std::to_string(met.trim_points) + " of " +
+                std::to_string(met.trim_points_requested) + " steer stations",
+            "the rest have no trim solution inside the sideslip sweep — widen the "
+            "sideslip sweep, or the maximum reported is the beta window's"));
     }
     o.rows.push_back(text_row("limit character (§10.5)", analysis::to_string(met.character)));
     o.rows.push_back(raw_row("front construction limit", lim.front_A_Y_bar, "g"));

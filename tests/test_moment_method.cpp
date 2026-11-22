@@ -310,6 +310,122 @@ TEST_CASE("10.5: the trim line is the C_N = 0 locus", "[mmm]") {
     REQUIRE(std::abs(m.max_trimmed_delta) > 0.0);
 }
 
+// --------------------------------------- §10.5 the max-trimmed point is reportable
+//
+// Appendix D: a fixed defect gets a test. metrics() used to keep the FIRST
+// strictly-greater point on the trim line, and trim_line() walks delta upwards
+// from delta_min, so whenever the maximum was flat the reported steer angle was
+// delta_min itself — an artefact of the sweep WINDOW, which simply moved when the
+// window was widened.
+TEST_CASE("10.5: the max-trimmed steer does not follow the sweep window",
+          "[mmm][regression]") {
+    // Deliberately asymmetric. On a=b with identical axles the answer is zero
+    // steer for a real reason — see the neutral-vehicle case below — which would
+    // hide the window-dependence this test exists to catch.
+    const core::Vehicle v = mmm_vehicle(4, 6);
+    auto tF = axle_tire(420.0);
+    auto tR = axle_tire(420.0);
+
+    double first_A_Y = 0.0, first_delta = 0.0;
+    bool have = false;
+    for (double half_deg : {10.0, 15.0, 20.0, 30.0, 45.0, 60.0}) {
+        MmmSweep s;
+        s.V_mps = 30.0 * units::MPH;
+        s.beta_min = -15.0 * units::DEGREE;
+        s.beta_max = 15.0 * units::DEGREE;
+        s.delta_min = -half_deg * units::DEGREE;
+        s.delta_max = half_deg * units::DEGREE;
+        const auto m = metrics(MomentMethod(v, tF, tR, s));
+
+        INFO("half-width " << half_deg << " deg, reported delta "
+                           << m.max_trimmed_delta / units::DEGREE << " deg");
+        // The maximum itself is a property of the vehicle and the tires, so it
+        // must not depend on the window at all.
+        if (!have) {
+            first_A_Y = m.max_trimmed_A_Y_bar;
+            first_delta = m.max_trimmed_delta;
+            have = true;
+        } else {
+            REQUIRE_THAT(m.max_trimmed_A_Y_bar, WithinRel(first_A_Y, 1e-12));
+        }
+        // And the reported operating point must be INTERIOR, not the corner.
+        REQUIRE(std::abs(m.max_trimmed_delta) < 0.5 * half_deg * units::DEGREE);
+
+        // This tire saturates, so the maximum is flat in steer: that has to be
+        // reported, not hidden behind a single representative point.
+        REQUIRE(m.max_trimmed_is_plateau);
+        REQUIRE(m.max_trimmed_delta_lo < 0.0);
+        REQUIRE(m.max_trimmed_delta_hi > 0.0);
+        REQUIRE(m.max_trimmed_delta >= m.max_trimmed_delta_lo);
+        REQUIRE(m.max_trimmed_delta <= m.max_trimmed_delta_hi);
+    }
+    // The trim line is odd in delta, so +d and -d tie exactly. lerp() rounds the
+    // two grid values differently, so a bare `<` on |delta| decides the sign on
+    // one ulp and the answer flips with the window. The convention is a positive
+    // steer, which pairs with a negative sideslip and a positive A_Y.
+    REQUIRE(first_delta > 0.0);
+}
+
+TEST_CASE("10.5: a neutral vehicle reaches max trimmed A_Y at zero steer",
+          "[mmm][regression]") {
+    // a == b with identical axles. At the limit both axles saturate at the same
+    // force, so the trim condition a*Fy_F = b*Fy_R is satisfied with NO steer:
+    // the car sits at maximum lateral acceleration, both ends sliding, producing
+    // no yaw moment. Reporting delta = 0 there is the correct answer and not a
+    // failure of the tie-break, which is why the window-independence test above
+    // uses an asymmetric vehicle instead.
+    const core::Vehicle v = mmm_vehicle(5, 5);
+    auto t = axle_tire(420.0);
+
+    MmmSweep s;
+    s.V_mps = 30.0 * units::MPH;
+    s.beta_min = -15.0 * units::DEGREE;
+    s.beta_max = 15.0 * units::DEGREE;
+    s.delta_min = -15.0 * units::DEGREE;
+    s.delta_max = 15.0 * units::DEGREE;
+    const auto m = metrics(MomentMethod(v, t, t, s));
+
+    REQUIRE(m.max_trimmed_A_Y_bar > 0.5);
+    REQUIRE_THAT(m.max_trimmed_delta, WithinAbs(0.0, 1e-12));
+    REQUIRE(m.max_trimmed_is_plateau);
+}
+
+TEST_CASE("10.5: a trim line cut short by the beta window says so",
+          "[mmm][regression]") {
+    // With a non-saturating tire the trim line needs beta proportional to delta,
+    // so it runs out of the beta window long before delta_max — and the last
+    // surviving station need NOT sit on the beta boundary, which is why this is
+    // detected from the station count rather than from the point's position.
+    const core::Vehicle v = mmm_vehicle(4, 6);
+    tire::LinearTireConfig c;
+    c.id = "l1";
+    c.C_alpha_N_per_rad = -0.5 * 420.0 * kLbfDeg;   // pure linear: never saturates
+    auto l1 = tire::LinearTire::create(c);
+    REQUIRE(l1.ok());
+
+    MmmSweep s;
+    s.V_mps = 30.0 * units::MPH;
+    s.beta_min = -15.0 * units::DEGREE;
+    s.beta_max = 15.0 * units::DEGREE;
+    s.delta_min = -15.0 * units::DEGREE;
+    s.delta_max = 15.0 * units::DEGREE;
+    const auto m = metrics(MomentMethod(v, l1.value(), l1.value(), s));
+
+    INFO(m.trim_points << " of " << m.trim_points_requested << " steer stations");
+    REQUIRE(m.trim_line_truncated());
+    REQUIRE(m.trim_points < m.trim_points_requested);
+    REQUIRE(m.trim_points > 0);
+    // The reported maximum is then the beta window's, and it must not be dressed
+    // up as a plateau: nothing here is flat.
+    REQUIRE_FALSE(m.max_trimmed_is_plateau);
+
+    // A saturating tire on the same vehicle and window is NOT truncated, so the
+    // flag distinguishes the two rather than always firing.
+    auto sat = axle_tire(420.0);
+    const auto ms = metrics(MomentMethod(v, sat, sat, s));
+    REQUIRE_FALSE(ms.trim_line_truncated());
+}
+
 // ------------------------------------------------------------------ §10.7 I-4/C-01
 TEST_CASE("I-4 / C-01: P3 max trimmed A_Y matches P1's steady-state limit",
           "[mmm][crosscheck]") {
